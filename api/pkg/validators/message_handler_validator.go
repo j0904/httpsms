@@ -284,56 +284,58 @@ func (validator MessageHandlerValidator) ValidateMessageIndex(_ context.Context,
 
 // ValidateMessageSearch validates the requests.MessageSearch request
 func (validator MessageHandlerValidator) ValidateMessageSearch(ctx context.Context, request requests.MessageSearch) url.Values {
-	v := govalidator.New(govalidator.Options{
-		Data: &request,
-		Rules: govalidator.MapData{
-			"owners": []string{
-				multipleContactPhoneNumberRule,
-			},
-			"types": []string{
-				multipleInRule + ":" + strings.Join([]string{
-					entities.MessageTypeCallMissed,
-					entities.MessageTypeMobileOriginated,
-					entities.MessageTypeMobileTerminated,
-				}, ","),
-			},
-			"statuses": []string{
-				multipleInRule + ":" + strings.Join([]string{
-					entities.MessageStatusPending,
-					entities.MessageStatusSent,
-					entities.MessageStatusDelivered,
-					entities.MessageStatusFailed,
-					entities.MessageStatusExpired,
-					entities.MessageStatusReceived,
-				}, ","),
-			},
-			"sort_by": []string{
-				"in:" + strings.Join([]string{
-					"created_at",
-					"owner",
-					"contact",
-					"type",
-					"status",
-				}, ","),
-			},
-			"limit": []string{
-				"required",
-				"numeric",
-				"min:1",
-				"max:200",
-			},
-			"skip": []string{
-				"required",
-				"numeric",
-				"min:0",
-			},
-			"query": []string{
-				"max:50",
-			},
-			"token": []string{
-				"required",
-			},
+	rules := govalidator.MapData{
+		"owners": []string{
+			multipleContactPhoneNumberRule,
 		},
+		"types": []string{
+			multipleInRule + ":" + strings.Join([]string{
+				entities.MessageTypeCallMissed,
+				entities.MessageTypeMobileOriginated,
+				entities.MessageTypeMobileTerminated,
+			}, ","),
+		},
+		"statuses": []string{
+			multipleInRule + ":" + strings.Join([]string{
+				entities.MessageStatusPending,
+				entities.MessageStatusSent,
+				entities.MessageStatusDelivered,
+				entities.MessageStatusFailed,
+				entities.MessageStatusExpired,
+				entities.MessageStatusReceived,
+			}, ","),
+		},
+		"sort_by": []string{
+			"in:" + strings.Join([]string{
+				"created_at",
+				"owner",
+				"contact",
+				"type",
+				"status",
+			}, ","),
+		},
+		"limit": []string{
+			"required",
+			"numeric",
+			"min:1",
+			"max:200",
+		},
+		"skip": []string{
+			"required",
+			"numeric",
+			"min:0",
+		},
+		"query": []string{
+			"max:50",
+		},
+	}
+	if validator.tokenValidator.Enabled() {
+		rules["token"] = []string{"required"}
+	}
+
+	v := govalidator.New(govalidator.Options{
+		Data:  &request,
+		Rules: rules,
 	})
 
 	errors := v.ValidateStruct()

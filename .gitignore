@@ -9,6 +9,10 @@ android/app/release/
 
 tests/firebase-credentials.json
 tests/emulator/emulator.exe
+tests/e2e/node_modules/
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+tests/e2e/playwright/.cache/
 SECURITY_AUDIT_REPORT.md
 
 *.exe
@@ -17,3 +21,8 @@ docs/
 .output
 .agents/
 skills-lock.json
+
+android/local.properties
+android/app/keystore.properties
+android/app/httpsms-release.keystore
+android/app/build/

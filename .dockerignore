@@ -1,0 +1,7 @@
+*
+!android/**
+!.git/**
+android/local.properties
+android/.gradle/
+android/app/build/
+android/app/build.gradle.kts.bak

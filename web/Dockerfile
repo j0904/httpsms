@@ -8,10 +8,10 @@ COPY package.json pnpm-lock.yaml ./
 # Install pnpm
 RUN npm install -g pnpm
 
-RUN pnpm install
+RUN pnpm install --ignore-scripts && pnpm rebuild
 
 COPY . .
-RUN pnpm run generate
+RUN npx nuxt prepare && pnpm run generate
 
 # production stage
 FROM nginx:stable-alpine AS production

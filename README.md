@@ -277,6 +277,19 @@ docker compose down -v
 
 Integration tests also run automatically in CI on every push/PR to `main`.
 
+## 1&1 SMS-Flat — Usage Restrictions (Germany)
+
+Um Missbrauch vorzubeugen, gelten für alle Tarife mit SMS-Flat als Tarifkomponente
+oder als zubuchbare Option folgende zusätzliche Regelungen:
+
+- Der automatisierte Versand von SMS ist unzulässig.
+- Der Versand von SMS an mehr als 50 Empfänger gleichzeitig ist unzulässig.
+- Die Nutzung der Zusatzdienstleistung mit einem SMS-Modemzugang und/oder mit SMS zu E-Mail
+  oder Fax ist unzulässig.
+
+1&1 geht weiterhin von einer missbräuchlichen Nutzung bei mehr als 3.000 SMS pro Monat aus.
+In diesem Fall behält sich 1&1 vor, das Vertragsverhältnis außerordentlich zu kündigen.
+
 ## License
 
 This project is licensed under the GNU AFFERO GENERAL PUBLIC LICENSE Version 3 - see the [LICENSE](LICENSE) file for details

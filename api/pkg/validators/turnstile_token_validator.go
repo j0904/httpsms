@@ -43,11 +43,21 @@ func NewTurnstileTokenValidator(logger telemetry.Logger, tracer telemetry.Tracer
 	}
 }
 
+// Enabled reports whether Turnstile server-side validation is configured.
+func (v *TurnstileTokenValidator) Enabled() bool {
+	return v.secretKey != ""
+}
+
 // ValidateToken validates the cloudflare turnstile token
 // https://developers.cloudflare.com/turnstile/get-started/server-side-validation/
 func (v *TurnstileTokenValidator) ValidateToken(ctx context.Context, ipAddress, token string) bool {
 	ctx, span, ctxLogger := v.tracer.StartWithLogger(ctx, v.logger)
 	defer span.End()
+
+	// Turnstile is optional: if no secret key is configured, skip validation.
+	if v.secretKey == "" {
+		return true
+	}
 
 	payload, err := json.Marshal(map[string]string{
 		"secret":   v.secretKey,

@@ -126,6 +126,13 @@ const messageStatusSelectItems = [
 ]
 
 function getCaptcha(): Promise<string> {
+  const siteKey = (config.public as Record<string, string>)
+    .cloudflareTurnstileSiteKey
+  if (!siteKey) {
+    // Turnstile is optional: if no site key is configured, skip the widget.
+    return Promise.resolve('')
+  }
+
   return new Promise<string>((resolve, reject) => {
     const turnstile: Turnstile = (
       window as unknown as { turnstile?: Turnstile }
@@ -138,8 +145,7 @@ function getCaptcha(): Promise<string> {
 
       turnstileWidgetId =
         turnstile.render('#cloudflare-turnstile', {
-          sitekey: (config.public as Record<string, string>)
-            .cloudflareTurnstileSiteKey!,
+          sitekey: siteKey,
           action: 'search_messages',
           callback: (token) => resolve(token),
           'error-callback': (error: string) => reject(error),
