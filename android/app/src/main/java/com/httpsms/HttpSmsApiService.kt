@@ -62,6 +62,34 @@ class HttpSmsApiService(private val apiKey: String, private val baseURL: URI) {
         return null
     }
 
+    fun getOutstandingMessageIDs(): List<String> {
+        val request: Request = Request.Builder()
+            .url(resolveURL("/v1/messages/outstanding/list"))
+            .header(apiKeyHeader, apiKey)
+            .header(clientVersionHeader, BuildConfig.VERSION_NAME)
+            .build()
+
+        val response = try {
+            client.newCall(request).execute()
+        } catch (e: Exception) {
+            Timber.e(e, "Exception while fetching outstanding message IDs")
+            return emptyList()
+        }
+        if (response.isSuccessful) {
+            val payload = ResponseMessageIDList.fromJson(response.body!!.string())?.data
+            response.close()
+            if (payload == null) {
+                Timber.e("cannot decode outstanding message IDs payload")
+                return emptyList()
+            }
+            return payload
+        }
+
+        Timber.e("invalid response with code [${response.code}]")
+        response.close()
+        return emptyList()
+    }
+
     fun sendDeliveredEvent(messageId: String, timestamp: String): Boolean {
         return sendEvent(messageId, "DELIVERED", timestamp)
     }

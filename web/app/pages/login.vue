@@ -30,7 +30,7 @@ const to = computed(() => (route.query.to as string) || '/threads')
         <VCard max-width="500" class="mx-auto pa-4">
           <VCardText class="px-4 pt-2 pb-0">
             <ClientOnly>
-              <FirebaseAuth :to="to" />
+              <DidLogin :to="to" />
             </ClientOnly>
           </VCardText>
         </VCard>

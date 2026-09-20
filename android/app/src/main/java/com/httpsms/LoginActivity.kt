@@ -16,8 +16,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.MutableLiveData
-import com.google.android.gms.common.ConnectionResult
-import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.google.android.material.textfield.TextInputEditText
@@ -163,34 +161,8 @@ class LoginActivity : AppCompatActivity() {
         Timber.d("creating permissions launcher")
     }
 
-    private fun isGooglePlayServicesAvailable(): String? {
-        val googleApiAvailability = GoogleApiAvailability.getInstance()
-        val status = googleApiAvailability.isGooglePlayServicesAvailable(this)
-        if (status != ConnectionResult.SUCCESS) {
-            if (googleApiAvailability.isUserResolvableError(status)) {
-                googleApiAvailability.getErrorDialog(this, status, 2404)?.show()
-            }
-            return googleApiAvailability.getErrorString(status)
-        }
-        return null
-    }
-
-
     private fun onLoginClick() {
         Timber.d("login button clicked")
-
-        val error = isGooglePlayServicesAvailable()
-        if (error != null) {
-            Timber.d("google play services not installed [${error}]")
-            Toast.makeText(this, error, Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        if (Settings.getFcmToken(this) == null) {
-            Timber.d("The FCM token is not set")
-            Toast.makeText(this, "Cannot find FCM token. Make sure you have Google Play Services installed", Toast.LENGTH_LONG).show()
-            return
-        }
 
         loginButton().isEnabled = false
         val progressBar = findViewById<LinearProgressIndicator>(R.id.loginProgressIndicator)
@@ -295,9 +267,9 @@ class LoginActivity : AppCompatActivity() {
             val service = HttpSmsApiService(apiKey.text.toString(), URI(serverUrl.text.toString().trim()))
 
             var e164PhoneNumber = PhoneNumberValidator.formatE164(phoneNumber.text.toString().trim(), countryCode)
-            var response = service.updateFcmToken(e164PhoneNumber, Constants.SIM1, Settings.getFcmToken(this) ?: "")
+            var response = service.updateFcmToken(e164PhoneNumber, Constants.SIM1, "")
             if(response.second != null || response.third != null) {
-                Timber.e("error updating fcm token [${response.second}], third [${response.third}]")
+                Timber.e("error registering phone [${response.second}], third [${response.third}]")
                 liveData.postValue(Pair(response.second, response.third))
                 return@Thread
             }
@@ -309,7 +281,7 @@ class LoginActivity : AppCompatActivity() {
             }
 
             e164PhoneNumber = PhoneNumberValidator.formatE164(phoneNumberSIM2.text.toString().trim(), countryCode)
-            response = service.updateFcmToken(e164PhoneNumber, Constants.SIM2, Settings.getFcmToken(this) ?: "")
+            response = service.updateFcmToken(e164PhoneNumber, Constants.SIM2, "")
 
             liveData.postValue(Pair(response.second, response.third))
             Timber.d("finished validating api URL")

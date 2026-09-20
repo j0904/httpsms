@@ -64,6 +64,7 @@ func (h *MessageHandler) RegisterPhoneAPIKeyRoutes(router fiber.Router, middlewa
 	h.register(router, fiber.MethodPost, "/v1/messages/receive", middlewares, h.PostReceive)
 	h.register(router, fiber.MethodPost, "/v1/messages/calls/missed", middlewares, h.PostCallMissed)
 	h.register(router, fiber.MethodGet, "/v1/messages/outstanding", middlewares, h.GetOutstanding)
+	h.register(router, fiber.MethodGet, "/v1/messages/outstanding/list", middlewares, h.ListOutstandingIDs)
 }
 
 // PostSend a new entities.Message
@@ -224,6 +225,40 @@ func (h *MessageHandler) GetOutstanding(c fiber.Ctx) error {
 	}
 
 	return h.responseOK(c, "outstanding message fetched successfully", message)
+}
+
+// ListOutstandingIDs returns IDs of entities.Message which are still to be sent by the mobile phone.
+// It is used by phones polling without push notifications: statuses are left untouched,
+// the phone claims each message with GetOutstanding before sending.
+// @Summary      List outstanding message IDs
+// @Description  List IDs of outstanding messages to be sent by an android phone polling without push notifications
+// @Security	 ApiKeyAuth
+// @Tags         Messages
+// @Accept       json
+// @Produce      json
+// @Success      200 		{array}		string
+// @Failure 	 401    	{object}	responses.Unauthorized
+// @Failure      500    	{object}	responses.InternalServerError
+// @Router       /messages/outstanding/list [get]
+func (h *MessageHandler) ListOutstandingIDs(c fiber.Ctx) error {
+	ctx, span := h.tracer.StartFromFiberCtx(c)
+	defer span.End()
+
+	ctxLogger := h.tracer.CtxLogger(h.logger, span)
+
+	authCtx := h.userFromContext(c)
+	ids, err := h.service.ListOutstandingIDs(ctx, services.MessageListOutstandingParams{
+		UserID:       authCtx.ID,
+		PhoneNumbers: authCtx.PhoneNumbers,
+		Limit:        100,
+	})
+	if err != nil {
+		msg := fmt.Sprintf("cannot list outstanding messages [%s]", c.OriginalURL())
+		ctxLogger.Error(stacktrace.Propagate(err, msg))
+		return h.responseInternalServerError(c)
+	}
+
+	return h.responseOK(c, "outstanding message IDs fetched successfully", ids)
 }
 
 // Index returns messages sent between 2 phone numbers

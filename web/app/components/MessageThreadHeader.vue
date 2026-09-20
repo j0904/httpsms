@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useDisplay } from 'vuetify'
-import { getAuth, signOut } from 'firebase/auth'
 import {
   mdiPlus,
   mdiAccountCog,
@@ -66,8 +65,6 @@ async function toggleArchive() {
 }
 
 async function logout() {
-  const auth = getAuth()
-  await signOut(auth)
   authStore.resetState()
   phonesStore.resetState()
   threadsStore.resetState()

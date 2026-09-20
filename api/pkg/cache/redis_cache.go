@@ -51,3 +51,18 @@ func (cache *redisCache) Set(ctx context.Context, key string, value string, ttl 
 	}
 	return nil
 }
+
+// GetDel atomically returns and deletes an item from the redis cache
+func (cache *redisCache) GetDel(ctx context.Context, key string) (value string, err error) {
+	ctx, span := cache.tracer.Start(ctx)
+	defer span.End()
+
+	response, err := cache.client.GetDel(ctx, key).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", stacktrace.Propagate(err, fmt.Sprintf("no item found in redis with key [%s]", key))
+	}
+	if err != nil {
+		return "", stacktrace.Propagate(err, fmt.Sprintf("cannot get and delete item in redis with key [%s]", key))
+	}
+	return response, nil
+}

@@ -33,6 +33,11 @@ type MessageRepository interface {
 	// GetOutstanding fetches an entities.Message which is outstanding
 	GetOutstanding(ctx context.Context, userID entities.UserID, messageID uuid.UUID, phoneNumbers []string) (*entities.Message, error)
 
+	// ListOutstandingIDs fetches IDs of entities.Message which are outstanding,
+	// without changing any status. The phone claims each message with
+	// GetOutstanding before sending, which keeps polling safe.
+	ListOutstandingIDs(ctx context.Context, userID entities.UserID, phoneNumbers []string, limit int) ([]uuid.UUID, error)
+
 	// Delete an entities.Message by ID
 	Delete(ctx context.Context, userID entities.UserID, messageID uuid.UUID) error
 

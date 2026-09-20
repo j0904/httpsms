@@ -292,6 +292,31 @@ func (repository *gormMessageRepository) GetOutstanding(ctx context.Context, use
 	return message, nil
 }
 
+// ListOutstandingIDs fetches IDs of messages still to be sent by the phone.
+// Unlike GetOutstanding it does not change any status: the phone claims each
+// message with GetOutstanding before sending, which keeps polling safe.
+func (repository *gormMessageRepository) ListOutstandingIDs(ctx context.Context, userID entities.UserID, phoneNumbers []string, limit int) ([]uuid.UUID, error) {
+	ctx, span := repository.tracer.Start(ctx)
+	defer span.End()
+
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+
+	ids := make([]uuid.UUID, 0)
+	query := repository.db.WithContext(ctx).Model(&entities.Message{}).
+		Where("user_id = ?", userID).
+		Where("status IN ?", []entities.MessageStatus{entities.MessageStatusScheduled, entities.MessageStatusPending, entities.MessageStatusExpired})
+	if len(phoneNumbers) > 0 {
+		query = query.Where("owner IN ?", phoneNumbers)
+	}
+	if err := query.Order("order_timestamp ASC").Limit(limit).Pluck("id", &ids).Error; err != nil {
+		msg := fmt.Sprintf("cannot list outstanding messages with userID [%s]", userID)
+		return nil, repository.tracer.WrapErrorSpan(span, stacktrace.Propagate(err, msg))
+	}
+	return ids, nil
+}
+
 func (repository *gormMessageRepository) order(params IndexParams, defaultSortBy string) string {
 	sortBy := defaultSortBy
 	if len(params.SortBy) > 0 {

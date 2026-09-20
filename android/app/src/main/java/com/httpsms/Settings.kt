@@ -21,9 +21,7 @@ object Settings {
     private const val SETTINGS_DEBUG_LOG_ENABLED = "SETTINGS_DEBUG_LOG_ENABLED"
     private const val SETTINGS_API_KEY = "SETTINGS_API_KEY"
     private const val SETTINGS_SERVER_URL = "SETTINGS_SERVER_URL"
-    private const val SETTINGS_FCM_TOKEN = "SETTINGS_FCM_TOKEN"
     private const val SETTINGS_USER_ID = "SETTINGS_USER_ID"
-    private const val SETTINGS_FCM_TOKEN_UPDATE_TIMESTAMP = "SETTINGS_FCM_TOKEN_UPDATE_TIMESTAMP"
     private const val SETTINGS_HEARTBEAT_TIMESTAMP = "SETTINGS_HEARTBEAT_TIMESTAMP"
     private const val SETTINGS_ENCRYPTION_KEY = "SETTINGS_ENCRYPTION_KEY"
     private const val SETTINGS_ENCRYPT_RECEIVED_MESSAGES = "SETTINGS_ENCRYPT_RECEIVED_MESSAGES"
@@ -69,27 +67,6 @@ object Settings {
 
     fun hasOwner(context: Context): Boolean {
         return getSIM1PhoneNumber(context) != ""
-    }
-
-    fun getFcmTokenLastUpdateTimestamp(context: Context): Long {
-        Timber.d(Settings::getFcmTokenLastUpdateTimestamp.name)
-
-        val timestamp = PreferenceManager
-            .getDefaultSharedPreferences(context)
-            .getLong(this.SETTINGS_FCM_TOKEN_UPDATE_TIMESTAMP,0)
-
-        Timber.d("SETTINGS_FCM_TOKEN_UPDATE_TIMESTAMP: [$timestamp]")
-        return timestamp
-    }
-
-
-    fun setFcmTokenLastUpdateTimestampAsync(context: Context, timestamp: Long) {
-        Timber.d(Settings::setFcmTokenLastUpdateTimestampAsync.name)
-
-        PreferenceManager.getDefaultSharedPreferences(context)
-            .edit()
-            .putLong(this.SETTINGS_FCM_TOKEN_UPDATE_TIMESTAMP, timestamp)
-            .apply()
     }
 
     fun setSIM1PhoneNumber(context: Context, owner: String?) {
@@ -328,26 +305,6 @@ object Settings {
         PreferenceManager.getDefaultSharedPreferences(context)
             .edit()
             .putString(this.SETTINGS_API_KEY, apiKey)
-            .apply()
-    }
-
-    fun getFcmToken(context: Context): String?{
-        Timber.d(Settings::getFcmToken.name)
-
-        val activeStatus = PreferenceManager
-            .getDefaultSharedPreferences(context)
-            .getString(this.SETTINGS_FCM_TOKEN,null)
-
-        Timber.d("SETTINGS_FCM_TOKEN: [$activeStatus]")
-        return activeStatus
-    }
-
-    fun setFcmTokenAsync(context: Context, apiKey: String) {
-        Timber.d(Settings::setApiKeyAsync.name)
-
-        PreferenceManager.getDefaultSharedPreferences(context)
-            .edit()
-            .putString(this.SETTINGS_FCM_TOKEN, apiKey)
             .apply()
     }
 

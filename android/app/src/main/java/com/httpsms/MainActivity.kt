@@ -54,7 +54,6 @@ class MainActivity : AppCompatActivity() {
 
         setCardContent(this)
         registerListeners()
-        refreshToken(this)
 
         startStickyNotification(this)
         scheduleHeartbeatWorker(this)
@@ -73,7 +72,6 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         Timber.d( "on activity resume")
         redirectToLogin()
-        refreshToken(this)
         setCardContent(this)
         setSmsPermissionListener()
         setBatteryOptimizationListener()
@@ -168,53 +166,6 @@ class MainActivity : AppCompatActivity() {
         val notificationIntent = Intent(context, StickyNotificationService::class.java)
         val service = context.startForegroundService(notificationIntent)
         Timber.d("foreground service started [${service?.className}]")
-    }
-
-    private fun refreshToken(context: Context) {
-        if(!Settings.isLoggedIn(context)) {
-            Timber.w("cannot refresh token because owner is not logged in")
-            return
-        }
-
-        if(!Settings.hasOwner(context)) {
-            Timber.w("cannot refresh token because owner does not exist")
-            return
-        }
-
-        if (Settings.getFcmToken(context) == null) {
-            Timber.w("cannot refresh token because token does not exist")
-            return
-        }
-
-        val updateTimestamp = Settings.getFcmTokenLastUpdateTimestamp(context)
-        Timber.d("FCM_TOKEN_UPDATE_TIMESTAMP: $updateTimestamp")
-
-        val interval = 24 * 60 * 60 * 1000 // 1 day
-        val currentTimeStamp = System.currentTimeMillis()
-
-        if (currentTimeStamp - updateTimestamp < interval) {
-            Timber.i("update interval [${currentTimeStamp - updateTimestamp}] < 24 hours [$interval]")
-            return
-        }
-
-        sendFCMToken(currentTimeStamp, context, Settings.getSIM1PhoneNumber(context), Constants.SIM1)
-        if (Settings.isDualSIM(context)) {
-            sendFCMToken(currentTimeStamp, context, Settings.getSIM2PhoneNumber(context), Constants.SIM2)
-        }
-    }
-
-    private fun sendFCMToken(timestamp: Long, context:Context, phoneNumber: String, sim: String) {
-        Thread {
-            val response = HttpSmsApiService.create(context).updateFcmToken(phoneNumber, sim,Settings.getFcmToken(context) ?: "")
-            if (response.first != null) {
-                Settings.setUserID(context, response.first!!.userID)
-                Settings.setFcmTokenLastUpdateTimestampAsync(context, timestamp)
-                Timber.i("[${sim}] FCM token uploaded successfully")
-                return@Thread
-            } else {
-                Timber.e("[${sim}] could not update FCM token")
-            }
-        }.start()
     }
 
     private fun initTimber() {

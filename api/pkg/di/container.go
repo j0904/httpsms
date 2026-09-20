@@ -25,9 +25,6 @@ import (
 
 	"github.com/NdoleStudio/httpsms/pkg/discord"
 
-	"cloud.google.com/go/storage"
-	mexporter "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric"
-	cloudtrace "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace"
 	"github.com/NdoleStudio/httpsms/pkg/cache"
 	"github.com/NdoleStudio/lemonsqueezy-go"
 	"github.com/hashicorp/go-retryablehttp"
@@ -41,8 +38,6 @@ import (
 
 	"github.com/NdoleStudio/httpsms/pkg/emails"
 
-	cloudtasks "cloud.google.com/go/cloudtasks/apiv2"
-
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -55,10 +50,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/sdk/trace"
 
-	firebase "firebase.google.com/go"
-	"firebase.google.com/go/auth"
 	"github.com/NdoleStudio/httpsms/pkg/middlewares"
-	"google.golang.org/api/option"
 
 	"github.com/gofiber/fiber/v3/middleware/compress"
 	"github.com/gofiber/fiber/v3/middleware/cors"
@@ -159,6 +151,8 @@ func NewContainer(projectID string, version string) (container *Container) {
 	container.RegisterMarketingListeners()
 	container.RegisterWebsocketListeners()
 
+	container.RegisterDIDAuthRoutes()
+
 	// this has to be last since it registers the /* route
 	container.RegisterSwaggerRoutes()
 
@@ -201,7 +195,6 @@ func (container *Container) App() (app *fiber.App) {
 		),
 	)
 	app.Use(middlewares.HTTPRequestLogger(container.Tracer(), container.Logger()))
-	app.Use(middlewares.BearerAuth(container.Logger(), container.Tracer(), container.FirebaseAuthClient()))
 	app.Use(middlewares.APIKeyAuth(container.Logger(), container.Tracer(), container.UserRepository()))
 
 	container.app = app
@@ -417,18 +410,6 @@ ALTER TABLE discords ADD CONSTRAINT IF NOT EXISTS uni_discords_server_id CHECK (
 	return container.db
 }
 
-// FirebaseApp creates a new instance of firebase.App
-func (container *Container) FirebaseApp() (app *firebase.App) {
-	container.logger.Debug(fmt.Sprintf("creating %T", app))
-
-	app, err := firebase.NewApp(context.Background(), nil, option.WithCredentialsJSON(container.FirebaseCredentials()))
-	if err != nil {
-		msg := "cannot initialize firebase application"
-		container.logger.Fatal(stacktrace.Propagate(err, msg))
-	}
-	return app
-}
-
 // InMemoryCache returns the shared in-memory cache.Cache, creating it on the first call.
 func (container *Container) InMemoryCache() cache.Cache {
 	if container.inMemoryCache != nil {
@@ -468,29 +449,6 @@ func (container *Container) Cache() cache.Cache {
 	return cache.NewRedisCache(container.Tracer(), redisClient)
 }
 
-// FirebaseAuthClient creates a new instance of auth.Client
-func (container *Container) FirebaseAuthClient() (client *auth.Client) {
-	container.logger.Debug(fmt.Sprintf("creating %T", client))
-	authClient, err := container.FirebaseApp().Auth(context.Background())
-	if err != nil {
-		msg := "cannot initialize firebase auth client"
-		container.logger.Fatal(stacktrace.Propagate(err, msg))
-	}
-	return authClient
-}
-
-// CloudTasksClient creates a new instance of cloudtasks.Client
-func (container *Container) CloudTasksClient() (client *cloudtasks.Client) {
-	container.logger.Debug(fmt.Sprintf("creating %T", client))
-
-	client, err := cloudtasks.NewClient(context.Background(), option.WithCredentialsJSON(container.FirebaseCredentials()))
-	if err != nil {
-		container.logger.Fatal(stacktrace.Propagate(err, "cannot initialize cloud tasks client"))
-	}
-
-	return client
-}
-
 // EventsQueueConfiguration creates a new instance of services.PushQueueConfig
 func (container *Container) EventsQueueConfiguration() (config services.PushQueueConfig) {
 	container.logger.Debug(fmt.Sprintf("creating %T", config))
@@ -503,15 +461,11 @@ func (container *Container) EventsQueueConfiguration() (config services.PushQueu
 	}
 }
 
-// EventsQueue creates a new instance of services.PushQueue
+// EventsQueue creates an in-process instance of events services.PushQueue.
+// Delayed delivery is handled locally without any cloud task provider.
 func (container *Container) EventsQueue() (queue services.PushQueue) {
 	container.logger.Debug("creating events services.PushQueue")
-
-	if os.Getenv("EVENTS_QUEUE_TYPE") == "emulator" {
-		return container.EmulatorEventsQueue()
-	}
-
-	return container.CloudTaskEventsQueue()
+	return container.EmulatorEventsQueue()
 }
 
 // EmulatorEventsQueue creates an in process instance of events services.PushQueue
@@ -523,46 +477,6 @@ func (container *Container) EmulatorEventsQueue() (queue services.PushQueue) {
 		container.HTTPClient("emulator_events_queue"),
 		container.EventsQueueConfiguration(),
 	)
-}
-
-// CloudTaskEventsQueue creates a Google cloud task instance of events services.PushQueue
-func (container *Container) CloudTaskEventsQueue() (queue services.PushQueue) {
-	container.logger.Debug("creating cloud task events services.PushQueue")
-	return services.NewGooglePushQueue(
-		container.Logger(),
-		container.Tracer(),
-		container.CloudTasksClient(),
-		container.EventsQueueConfiguration(),
-	)
-}
-
-// FCMClient creates the appropriate FCM client based on configuration.
-// When FCM_ENDPOINT is set, it returns an EmulatorFCMClient that sends
-// notifications directly to the phone emulator via HTTP.
-// Otherwise, it returns a FirebaseFCMClient that uses the real Firebase SDK.
-func (container *Container) FCMClient() services.FCMClient {
-	if fcmEndpoint := os.Getenv("FCM_ENDPOINT"); fcmEndpoint != "" {
-		container.logger.Info(fmt.Sprintf("using emulator FCM client with endpoint: %s", fcmEndpoint))
-		return services.NewEmulatorFCMClient(
-			container.HTTPClient("emulator_fcm"),
-			fcmEndpoint,
-			container.Logger(),
-		)
-	}
-
-	container.logger.Debug("creating FirebaseFCMClient")
-	messagingClient, err := container.FirebaseApp().Messaging(context.Background())
-	if err != nil {
-		msg := "cannot initialize firebase messaging client"
-		container.logger.Fatal(stacktrace.Propagate(err, msg))
-	}
-	return services.NewFirebaseFCMClient(messagingClient)
-}
-
-// FirebaseCredentials returns firebase credentials as bytes.
-func (container *Container) FirebaseCredentials() []byte {
-	container.logger.Debug("creating firebase credentials")
-	return []byte(os.Getenv("FIREBASE_CREDENTIALS"))
 }
 
 // Tracer creates a new instance of telemetry.Tracer
@@ -717,6 +631,27 @@ func (container *Container) UserHandlerValidator() (validator *validators.UserHa
 		container.Logger(),
 		container.Tracer(),
 		container.UserService(),
+	)
+}
+
+// DIDAuthHandler creates a new instance of handlers.DIDAuthHandler
+func (container *Container) DIDAuthHandler() (handler *handlers.DIDAuthHandler) {
+	container.logger.Debug(fmt.Sprintf("creating %T", handler))
+	return handlers.NewDIDAuthHandler(
+		container.Logger(),
+		container.Tracer(),
+		container.DIDAuthHandlerValidator(),
+		container.UserRepository(),
+		handlers.NewCacheNonceStore(container.Cache()),
+	)
+}
+
+// DIDAuthHandlerValidator creates a new instance of validators.DIDAuthHandlerValidator
+func (container *Container) DIDAuthHandlerValidator() (validator *validators.DIDAuthHandlerValidator) {
+	container.logger.Debug(fmt.Sprintf("creating %T", validator))
+	return validators.NewDIDAuthHandlerValidator(
+		container.Logger(),
+		container.Tracer(),
 	)
 }
 
@@ -1047,7 +982,7 @@ func (container *Container) MarketingService() (service *services.MarketingServi
 	return services.NewMarketingService(
 		container.Logger(),
 		container.Tracer(),
-		container.FirebaseAuthClient(),
+		container.UserRepository(),
 		container.PlunkClient(),
 	)
 }
@@ -1063,7 +998,6 @@ func (container *Container) UserService() (service *services.UserService) {
 		container.UserEmailFactory(),
 		container.LemonsqueezyClient(),
 		container.EventDispatcher(),
-		container.FirebaseAuthClient(),
 		container.HTTPClient("lemonsqueezy"),
 	)
 }
@@ -1570,32 +1504,18 @@ func (container *Container) MessageService() (service *services.MessageService) 
 	)
 }
 
-// AttachmentRepository creates a cached AttachmentRepository based on configuration
+// AttachmentRepository creates a cached in-process AttachmentRepository.
+// Attachments are kept locally without any cloud storage provider.
 func (container *Container) AttachmentRepository() repositories.AttachmentRepository {
 	if container.attachmentRepository != nil {
 		return container.attachmentRepository
 	}
 
-	bucket := os.Getenv("GCS_BUCKET_NAME")
-	if bucket != "" {
-		container.logger.Debug("creating GoogleCloudStorageAttachmentRepository")
-		client, err := storage.NewClient(context.Background(), option.WithAuthCredentialsJSON(option.ServiceAccount, container.FirebaseCredentials()))
-		if err != nil {
-			container.logger.Fatal(stacktrace.Propagate(err, "cannot create GCS client"))
-		}
-		container.attachmentRepository = repositories.NewGoogleCloudStorageAttachmentRepository(
-			container.Logger(),
-			container.Tracer(),
-			client,
-			bucket,
-		)
-	} else {
-		container.logger.Debug("creating MemoryAttachmentRepository (GCS_BUCKET_NAME not set)")
-		container.attachmentRepository = repositories.NewMemoryAttachmentRepository(
-			container.Logger(),
-			container.Tracer(),
-		)
-	}
+	container.logger.Debug("creating MemoryAttachmentRepository")
+	container.attachmentRepository = repositories.NewMemoryAttachmentRepository(
+		container.Logger(),
+		container.Tracer(),
+	)
 
 	return container.attachmentRepository
 }
@@ -1639,7 +1559,6 @@ func (container *Container) NotificationService() (service *services.PhoneNotifi
 	return services.NewNotificationService(
 		container.Logger(),
 		container.Tracer(),
-		container.FCMClient(),
 		container.PhoneRepository(),
 		container.PhoneNotificationRepository(),
 		container.MessageSendScheduleRepository(),
@@ -1708,6 +1627,12 @@ func (container *Container) RegisterMessageSendScheduleRoutes() {
 func (container *Container) RegisterEventRoutes() {
 	container.logger.Debug(fmt.Sprintf("registering %T routes", &handlers.EventsHandler{}))
 	container.EventsHandler().RegisterRoutes(container.App(), container.AuthenticatedMiddleware())
+}
+
+// RegisterDIDAuthRoutes registers routes for the /did-auth prefix
+func (container *Container) RegisterDIDAuthRoutes() {
+	container.logger.Debug(fmt.Sprintf("registering %T routes", &handlers.DIDAuthHandler{}))
+	container.DIDAuthHandler().RegisterRoutes(container.App())
 }
 
 // RegisterSwaggerRoutes registers routes for swagger
@@ -1796,42 +1721,6 @@ func (container *Container) UserRistrettoCache() *ristretto.Cache[string, entiti
 // InitializeTraceProvider initializes the open telemetry trace provider
 func (container *Container) InitializeTraceProvider() func() {
 	return container.initializeAxiomTraceProvider(container.version, container.projectID)
-}
-
-func (container *Container) initializeGoogleTraceProvider(version string, namespace string) func() {
-	container.logger.Debug("initializing google trace meterProvider")
-
-	traceExporter, err := cloudtrace.New(cloudtrace.WithProjectID(os.Getenv("GCP_PROJECT_ID")))
-	if err != nil {
-		container.logger.Fatal(stacktrace.Propagate(err, "cannot create cloud trace traceExporter"))
-	}
-
-	tp := trace.NewTracerProvider(
-		trace.WithBatcher(traceExporter),
-		trace.WithSampler(trace.AlwaysSample()),
-		trace.WithResource(container.OtelResources(version, namespace)),
-	)
-	otel.SetTracerProvider(tp)
-
-	metricExporter, err := mexporter.New(mexporter.WithProjectID(os.Getenv("GCP_PROJECT_ID")))
-	if err != nil {
-		container.logger.Fatal(stacktrace.Propagate(err, "cannot create cloud metric traceExporter"))
-	}
-
-	meterProvider := metric.NewMeterProvider(
-		metric.WithReader(metric.NewPeriodicReader(metricExporter)),
-		metric.WithResource(container.OtelResources(version, namespace)),
-	)
-	otel.SetMeterProvider(meterProvider)
-
-	return func() {
-		if err = metricExporter.Shutdown(context.Background()); err != nil {
-			container.logger.Error(stacktrace.Propagate(err, "cannot shutdown cloud metric metric exporter"))
-		}
-		if err = traceExporter.Shutdown(context.Background()); err != nil {
-			container.logger.Error(stacktrace.Propagate(err, "cannot shutdown cloud trace trace exporter"))
-		}
-	}
 }
 
 func (container *Container) initializeAxiomTraceProvider(version string, namespace string) func() {

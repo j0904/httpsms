@@ -151,7 +151,6 @@ class SettingsActivity : AppCompatActivity() {
                 Settings.setUserID(this, null)
                 Settings.setEncryptionKey(this, null)
                 Settings.setEncryptReceivedMessages(this, false)
-                Settings.setFcmTokenLastUpdateTimestampAsync(this, 0)
                 Settings.setIncomingCallEventsEnabled(this, Constants.SIM1, false)
                 Settings.setIncomingCallEventsEnabled(this, Constants.SIM2, false)
                 redirectToLogin()

@@ -12,6 +12,15 @@ data class ResponseMessage (
         fun fromJson(json: String) = Klaxon().parse<ResponseMessage>(json)
     }
 }
+data class ResponseMessageIDList (
+    val data: List<String>,
+    val message: String,
+    val status: String
+) {
+    companion object {
+        fun fromJson(json: String) = Klaxon().parse<ResponseMessageIDList>(json)
+    }
+}
 data class ResponsePhone (
     val data: Phone,
     val message: String,

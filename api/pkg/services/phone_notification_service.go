@@ -9,7 +9,6 @@ import (
 	"github.com/NdoleStudio/httpsms/pkg/events"
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 
-	"firebase.google.com/go/messaging"
 	"github.com/NdoleStudio/httpsms/pkg/entities"
 	"github.com/NdoleStudio/httpsms/pkg/repositories"
 	"github.com/NdoleStudio/httpsms/pkg/telemetry"
@@ -18,7 +17,9 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// PhoneNotificationService sends out notifications to mobile phones
+// PhoneNotificationService sends out notifications to mobile phones.
+// Phones without push support poll for outstanding messages instead, so no
+// push client is needed.
 type PhoneNotificationService struct {
 	service
 	logger                        telemetry.Logger
@@ -26,7 +27,6 @@ type PhoneNotificationService struct {
 	phoneNotificationRepository   repositories.PhoneNotificationRepository
 	phoneRepository               repositories.PhoneRepository
 	messageSendScheduleRepository repositories.MessageSendScheduleRepository
-	messagingClient               FCMClient
 	eventDispatcher               *EventDispatcher
 }
 
@@ -34,18 +34,16 @@ type PhoneNotificationService struct {
 func NewNotificationService(
 	logger telemetry.Logger,
 	tracer telemetry.Tracer,
-	messagingClient FCMClient,
 	phoneRepository repositories.PhoneRepository,
 	phoneNotificationRepository repositories.PhoneNotificationRepository,
 	messageSendScheduleRepository repositories.MessageSendScheduleRepository,
 	dispatcher *EventDispatcher,
 ) (s *PhoneNotificationService) {
 	return &PhoneNotificationService{
-		logger:                        logger.WithService(fmt.Sprintf("%T", &PhoneNotificationService{})),
-		tracer:                        tracer,
-		messagingClient:               messagingClient,
-		phoneNotificationRepository:   phoneNotificationRepository,
-		phoneRepository:               phoneRepository,
+		logger:                      logger.WithService(fmt.Sprintf("%T", &PhoneNotificationService{})),
+		tracer:                      tracer,
+		phoneNotificationRepository: phoneNotificationRepository,
+		phoneRepository:             phoneRepository,
 		messageSendScheduleRepository: messageSendScheduleRepository,
 		eventDispatcher:               dispatcher,
 	}
@@ -90,33 +88,8 @@ func (service *PhoneNotificationService) SendHeartbeatFCM(ctx context.Context, p
 		return service.tracer.WrapErrorSpan(span, stacktrace.Propagate(err, msg))
 	}
 
-	if phone.FcmToken == nil {
-		msg := fmt.Sprintf("phone with id [%s] has no FCM token", phone.ID)
-		return service.tracer.WrapErrorSpan(span, stacktrace.Propagate(err, msg))
-	}
-
-	result, err := service.messagingClient.Send(ctx, &messaging.Message{
-		Data: map[string]string{
-			"KEY_HEARTBEAT_ID": time.Now().UTC().Format(time.RFC3339),
-		},
-		Android: &messaging.AndroidConfig{
-			Priority: "high",
-		},
-		Token: *phone.FcmToken,
-	})
-	if err != nil {
-		msg := fmt.Sprintf("cannot send heartbeat FCM to phone with id [%s] for user [%s]", phone.ID, phone.UserID)
-		ctxLogger.Warn(stacktrace.Propagate(err, msg))
-		return nil
-	}
-
-	ctxLogger.Info(fmt.Sprintf(
-		"successfully sent heartbeat FCM [%s] to phone with ID [%s] for user [%s] and monitor [%s]",
-		result,
-		payload.PhoneID,
-		payload.UserID,
-		payload.MonitorID,
-	))
+	// Phones poll for heartbeats and outstanding messages; there is no push.
+	ctxLogger.Info(fmt.Sprintf("skipping heartbeat push for phone with ID [%s], phone polls instead", phone.ID))
 	return nil
 }
 
@@ -141,37 +114,10 @@ func (service *PhoneNotificationService) Send(ctx context.Context, params *Phone
 		return service.handleNotificationFailed(ctx, errors.New(msg), params)
 	}
 
-	if phone.FcmToken == nil {
-		msg := fmt.Sprintf("phone with id [%s] has no FCM token", phone.ID)
-		return service.handleNotificationFailed(ctx, errors.New(msg), params)
-	}
-
-	ttl := phone.MessageExpirationDuration()
-	result, err := service.messagingClient.Send(ctx, &messaging.Message{
-		Data: map[string]string{
-			"KEY_MESSAGE_ID": params.MessageID.String(),
-		},
-		Android: &messaging.AndroidConfig{
-			Priority: "normal",
-			TTL:      &ttl,
-		},
-		Token: *phone.FcmToken,
-	})
-	if err != nil {
-		ctxLogger.Warn(stacktrace.Propagate(
-			err,
-			fmt.Sprintf(
-				"cannot send FCM to phone with ID [%s] for user with ID [%s] and message [%s]",
-				phone.ID,
-				phone.UserID,
-				params.MessageID,
-			),
-		))
-		msg := fmt.Sprintf("cannot send notification for to your phone [%s]. Reinstall the httpSMS app on your Android phone.", phone.PhoneNumber)
-		return service.handleNotificationFailed(ctx, errors.New(msg), params)
-	}
-
-	return service.handleNotificationSent(ctx, phone, result, params)
+	// Phones poll for outstanding messages; the notification is handed off
+	// here and the phone claims each message with GetOutstanding.
+	ctxLogger.Info(fmt.Sprintf("leaving notification [%s] for message [%s] for phone [%s] to poll", params.PhoneNotificationID, params.MessageID, phone.ID))
+	return service.handleNotificationSent(ctx, phone, "poll", params)
 }
 
 // PhoneNotificationScheduleParams are parameters for sending a notification

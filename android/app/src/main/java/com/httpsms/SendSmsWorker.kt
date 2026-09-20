@@ -4,8 +4,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import androidx.work.*
-import com.google.firebase.messaging.FirebaseMessagingService
-import com.google.firebase.messaging.RemoteMessage
 import com.httpsms.SentReceiver.FailedMessageWorker
 import timber.log.Timber
 
@@ -18,120 +16,9 @@ import com.google.android.mms.pdu_alt.SendReq
 import okhttp3.MediaType
 import java.io.File
 
-class MyFirebaseMessagingService : FirebaseMessagingService() {
-    // [START receive_message]
-    override fun onMessageReceived(remoteMessage: RemoteMessage) {
-        initTimber()
-        Timber.d(MyFirebaseMessagingService::onMessageReceived.name)
-
-        if (remoteMessage.data.containsKey(Constants.KEY_HEARTBEAT_ID)) {
-            Timber.w("received heartbeat message with ID [${remoteMessage.data[Constants.KEY_HEARTBEAT_ID]}] and priority [${remoteMessage.priority}] and original priority [${remoteMessage.originalPriority}]")
-            sendHeartbeat()
-            return
-        }
-
-        val messageID = remoteMessage.data[Constants.KEY_MESSAGE_ID]
-        if (messageID == null)  {
-            Timber.e("cannot get message id from notification data with key [${Constants.KEY_MESSAGE_ID}]")
-            return
-        }
-
-        scheduleJob(messageID)
-    }
-    // [END receive_message]
-
-    // [START on_new_token]
-    /**
-     * Called if the FCM registration token is updated. This may occur if the security of
-     * the previous token had been compromised. Note that this is called when the
-     * FCM registration token is initially generated so this is where you would retrieve the token.
-     */
-    override fun onNewToken(token: String) {
-        initTimber()
-        Timber.d("Refreshed token: $token")
-
-        // If you want to send messages to this application instance or
-        // manage this apps subscriptions on the server side, send the
-        // FCM registration token to your app server.
-        sendRegistrationToServer(token)
-    }
-    // [END on_new_token]
-
-    private fun sendHeartbeat() {
-        Timber.d("sending heartbeat from FCM notification")
-        if (!Settings.isLoggedIn(applicationContext)) {
-            Timber.w("user is not logged in, not sending heartbeat")
-            return
-        }
-        Thread {
-            try {
-                val phoneNumbers = mutableListOf<String>()
-                phoneNumbers.add(Settings.getSIM1PhoneNumber(applicationContext))
-                if (Settings.getActiveStatus(applicationContext, Constants.SIM2)) {
-                    phoneNumbers.add(Settings.getSIM2PhoneNumber(applicationContext))
-                }
-
-                HttpSmsApiService.create(applicationContext).storeHeartbeat(phoneNumbers.toTypedArray(), Settings.isCharging(applicationContext))
-                Settings.setHeartbeatTimestampAsync(applicationContext, System.currentTimeMillis())
-            } catch (exception: Exception) {
-                Timber.e(exception)
-            }
-            Timber.d("finished sending pulse")
-        }.start()
-    }
-
-    private fun scheduleJob(messageID: String) {
-        // [START dispatch_job]
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-
-        val inputData: Data = workDataOf(Constants.KEY_MESSAGE_ID to messageID)
-        val work = OneTimeWorkRequest
-            .Builder(SendSmsWorker::class.java)
-            .setConstraints(constraints)
-            .setInputData(inputData)
-            .addTag(messageID)
-            .build()
-
-        WorkManager
-            .getInstance(this)
-            .enqueue(work)
-
-        Timber.d("work enqueued with ID [${work.id}] for messageID [${messageID}]")
-        // [END dispatch_job]
-    }
-    private fun sendRegistrationToServer(token: String) {
-        Timber.d("sendRegistrationTokenToServer($token)")
-        Settings.setFcmTokenAsync(this, token)
-
-        if (Settings.isLoggedIn(this)) {
-            Timber.d("updating SIM1 phone with new fcm token")
-            val response = HttpSmsApiService.create(this).updateFcmToken(Settings.getSIM1PhoneNumber(this), Constants.SIM1, token)
-            if (response.first != null) {
-                Settings.setUserID(this, response.first!!.userID)
-            }
-        }
-
-        if(Settings.isDualSIM(this)) {
-            Timber.d("updating SIM2 phone with new fcm token")
-            HttpSmsApiService.create(this).updateFcmToken(Settings.getSIM2PhoneNumber(this), Constants.SIM2, token)
-        }
-    }
-
-    private fun initTimber() {
-        if (Timber.treeCount > 1) {
-            Timber.d("timber is already initialized with count [${Timber.treeCount}]")
-            return
-        }
-
-        if(Settings.isDebugLogEnabled(this)) {
-            Timber.plant(Timber.DebugTree())
-            Timber.plant(LogzTree(this.applicationContext))
-        }
-    }
-
-    internal class SendSmsWorker(appContext: Context, workerParams: WorkerParameters) : Worker(appContext, workerParams) {
+// Sends one outstanding message fetched from the API. Enqueued by the poll
+// worker with the message ID in the input data (no push notifications).
+class SendSmsWorker(appContext: Context, workerParams: WorkerParameters) : Worker(appContext, workerParams) {
         override fun doWork(): Result {
             if (!Settings.isLoggedIn(applicationContext)) {
                 Timber.w("user is not logged in, stopping processing")
@@ -441,4 +328,4 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             )
         }
     }
-}
+

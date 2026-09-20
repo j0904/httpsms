@@ -1,6 +1,5 @@
 plugins {
     id("com.android.application")
-    id("com.google.gms.google-services")
     id("io.sentry.android.gradle") version "6.2.0"
 }
 
@@ -62,10 +61,7 @@ android {
 }
 
 dependencies {
-    implementation(platform("com.google.firebase:firebase-bom:34.11.0"))
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
-    implementation("com.google.firebase:firebase-analytics")
-    implementation("com.google.firebase:firebase-messaging")
     implementation("com.squareup.okhttp3:okhttp:5.3.2")
     implementation("com.jakewharton.timber:timber:5.0.1")
     implementation("androidx.preference:preference-ktx:1.2.1")

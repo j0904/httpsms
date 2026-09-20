@@ -2,7 +2,6 @@
 import {
   mdiArrowLeft,
   mdiAccountCircle,
-  mdiShieldCheck,
   mdiEye,
   mdiEyeOff,
   mdiQrcode,
@@ -15,12 +14,6 @@ import {
   mdiCalendarClock,
   mdiPlus,
 } from '@mdi/js'
-import {
-  getAuth,
-  sendEmailVerification,
-  signOut,
-  type User as FirebaseUser,
-} from 'firebase/auth'
 import QRCode from 'qrcode'
 import { ErrorMessages } from '~/utils/errors'
 import { toApiError } from '~/utils/api-error'
@@ -48,31 +41,7 @@ const phonesStore = usePhonesStore()
 const billingStore = useBillingStore()
 const notificationsStore = useNotificationsStore()
 
-const firebaseUser = ref<FirebaseUser | null>(null)
 const gravatarUrl = ref<string | null>(null)
-const sendingVerificationEmail = ref(false)
-const verificationEmailSent = ref(false)
-
-async function sendVerificationEmail() {
-  if (!firebaseUser.value) return
-  sendingVerificationEmail.value = true
-  try {
-    await sendEmailVerification(firebaseUser.value)
-    verificationEmailSent.value = true
-    notificationsStore.addNotification({
-      message: 'Verification email sent. Please check your inbox.',
-      type: 'success',
-    })
-  } catch (error) {
-    console.error('sendEmailVerification failed:', error)
-    notificationsStore.addNotification({
-      message: 'Failed to send verification email. Please try again later.',
-      type: 'error',
-    })
-  } finally {
-    sendingVerificationEmail.value = false
-  }
-}
 
 const computeGravatarUrl = async (email: string): Promise<string> => {
   const normalized = email.trim().toLowerCase()
@@ -84,9 +53,7 @@ const computeGravatarUrl = async (email: string): Promise<string> => {
   return `https://www.gravatar.com/avatar/${hash}?d=identicon&s=200`
 }
 
-const avatarUrl = computed(
-  () => firebaseUser.value?.photoURL ?? gravatarUrl.value,
-)
+const avatarUrl = computed(() => gravatarUrl.value)
 
 const apiKeyShow = ref(false)
 const showQrCodeDialog = ref(false)
@@ -769,8 +736,6 @@ async function deleteUserAccount() {
       message: message ?? 'Your account has been deleted successfully',
       type: 'success',
     })
-    const auth = getAuth()
-    await signOut(auth)
     authStore.resetState()
     phonesStore.resetState()
     notificationsStore.addNotification({
@@ -796,11 +761,10 @@ watch(showQrCodeDialog, (open) => {
 })
 
 onMounted(async () => {
-  firebaseUser.value = getAuth().currentUser
-  if (firebaseUser.value?.email) {
-    gravatarUrl.value = await computeGravatarUrl(firebaseUser.value.email)
-  }
   await Promise.all([authStore.loadUser(), phonesStore.loadPhones()])
+  if (authStore.user?.email) {
+    gravatarUrl.value = await computeGravatarUrl(authStore.user.email)
+  }
   syncEmailNotifications()
   loadWebhooks()
   loadDiscordIntegrations()
@@ -827,37 +791,14 @@ onMounted(async () => {
         <VRow>
           <VCol cols="12" md="9" offset-md="1" xl="8" offset-xl="2">
             <!-- Profile -->
-            <div v-if="firebaseUser" class="text-center">
+            <div v-if="authStore.user" class="text-center">
               <VAvatar v-if="avatarUrl" size="100" :image="avatarUrl" />
               <v-avatar v-else size="100">
                 <VIcon size="80" :icon="mdiAccountCircle" />
               </v-avatar>
 
-              <h3
-                v-if="firebaseUser.displayName"
-                class="text-title-large mt-2 mb-0"
-              >
-                {{ firebaseUser.displayName }}
-              </h3>
-              <h4 class="text-medium-emphasis mb-2 mt-0">
-                {{ firebaseUser.email }}
-                <VIcon
-                  v-if="firebaseUser.emailVerified"
-                  size="small"
-                  color="primary"
-                  :icon="mdiShieldCheck"
-                />
-                <VBtn
-                  v-else
-                  size="x-small"
-                  variant="tonal"
-                  color="warning"
-                  :loading="sendingVerificationEmail"
-                  :disabled="verificationEmailSent"
-                  @click="sendVerificationEmail"
-                >
-                  Verify Email
-                </VBtn>
+              <h4 class="text-medium-emphasis mb-2 mt-2">
+                {{ authStore.user.email }}
               </h4>
               <VAutocomplete
                 v-if="authStore.user"

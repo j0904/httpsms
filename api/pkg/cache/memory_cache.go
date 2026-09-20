@@ -45,3 +45,16 @@ func (cache *memoryCache) Set(ctx context.Context, key string, value string, ttl
 	cache.store.Set(key, value, ttl)
 	return nil
 }
+
+// GetDel atomically returns and deletes an item
+func (cache *memoryCache) GetDel(ctx context.Context, key string) (value string, err error) {
+	ctx, span := cache.tracer.Start(ctx)
+	defer span.End()
+
+	response, ok := cache.store.Get(key)
+	if !ok {
+		return "", stacktrace.NewError(fmt.Sprintf("no item found in cache with key [%s]", key))
+	}
+	cache.store.Delete(key)
+	return response.(string), nil
+}

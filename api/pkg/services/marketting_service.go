@@ -3,12 +3,11 @@ package services
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 
-	"firebase.google.com/go/auth"
 	"github.com/NdoleStudio/httpsms/pkg/entities"
+	"github.com/NdoleStudio/httpsms/pkg/repositories"
 	"github.com/NdoleStudio/httpsms/pkg/telemetry"
 	plunk "github.com/NdoleStudio/plunk-go"
 	"github.com/gofiber/fiber/v3"
@@ -17,24 +16,24 @@ import (
 
 // MarketingService is handles marketing requests
 type MarketingService struct {
-	logger      telemetry.Logger
-	tracer      telemetry.Tracer
-	authClient  *auth.Client
-	plunkClient *plunk.Client
+	logger         telemetry.Logger
+	tracer         telemetry.Tracer
+	userRepository repositories.UserRepository
+	plunkClient    *plunk.Client
 }
 
 // NewMarketingService creates a new instance of the MarketingService
 func NewMarketingService(
 	logger telemetry.Logger,
 	tracer telemetry.Tracer,
-	authClient *auth.Client,
+	userRepository repositories.UserRepository,
 	plunkClient *plunk.Client,
 ) *MarketingService {
 	return &MarketingService{
-		logger:      logger.WithService(fmt.Sprintf("%T", &MarketingService{})),
-		tracer:      tracer,
-		authClient:  authClient,
-		plunkClient: plunkClient,
+		logger:         logger.WithService(fmt.Sprintf("%T", &MarketingService{})),
+		tracer:         tracer,
+		userRepository: userRepository,
+		plunkClient:    plunkClient,
 	}
 }
 
@@ -67,18 +66,18 @@ func (service *MarketingService) CreateContact(ctx context.Context, userID entit
 	ctx, span, ctxLogger := service.tracer.StartWithLogger(ctx, service.logger)
 	defer span.End()
 
-	userRecord, err := service.authClient.GetUser(ctx, userID.String())
+	user, err := service.userRepository.Load(ctx, userID)
 	if err != nil {
-		msg := fmt.Sprintf("cannot get auth user with id [%s]", userID)
+		msg := fmt.Sprintf("cannot load user with id [%s]", userID)
 		return service.tracer.WrapErrorSpan(span, stacktrace.Propagate(err, msg))
 	}
 
-	data := service.attributes(userRecord)
+	data := fiber.Map{}
 	data[string(semconv.ServiceNameKey)] = "httpsms.com"
-	data[string(semconv.EnduserIDKey)] = userRecord.UID
+	data[string(semconv.EnduserIDKey)] = string(user.ID)
 
 	event, _, err := service.plunkClient.Tracker.TrackEvent(ctx, &plunk.TrackEventRequest{
-		Email:      userRecord.Email,
+		Email:      user.Email,
 		Event:      "contact.created",
 		Subscribed: true,
 		Data:       data,
@@ -90,23 +89,4 @@ func (service *MarketingService) CreateContact(ctx context.Context, userID entit
 
 	ctxLogger.Info(fmt.Sprintf("user [%s] added to marketting list with contact ID [%s] and event ID [%s]", userID, event.Data.Contact, event.Data.Event))
 	return nil
-}
-
-func (service *MarketingService) attributes(user *auth.UserRecord) map[string]any {
-	name := strings.TrimSpace(user.DisplayName)
-	if name == "" {
-		return fiber.Map{}
-	}
-
-	parts := strings.Split(name, " ")
-	if len(parts) == 1 {
-		return fiber.Map{
-			"firstName": name,
-		}
-	}
-
-	return fiber.Map{
-		"firstName": strings.Join(parts[0:len(parts)-1], " "),
-		"lastName":  parts[len(parts)-1],
-	}
 }

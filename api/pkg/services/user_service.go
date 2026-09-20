@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"firebase.google.com/go/auth"
 	"github.com/NdoleStudio/httpsms/pkg/emails"
 	"github.com/NdoleStudio/httpsms/pkg/events"
 	"github.com/NdoleStudio/lemonsqueezy-go"
@@ -29,7 +28,6 @@ type UserService struct {
 	mailer             emails.Mailer
 	repository         repositories.UserRepository
 	dispatcher         *EventDispatcher
-	authClient         *auth.Client
 	lemonsqueezyClient *lemonsqueezy.Client
 	httpClient         *http.Client
 }
@@ -43,7 +41,6 @@ func NewUserService(
 	emailFactory emails.UserEmailFactory,
 	lemonsqueezyClient *lemonsqueezy.Client,
 	dispatcher *EventDispatcher,
-	authClient *auth.Client,
 	httpClient *http.Client,
 ) (s *UserService) {
 	return &UserService{
@@ -53,7 +50,6 @@ func NewUserService(
 		emailFactory:       emailFactory,
 		repository:         repository,
 		dispatcher:         dispatcher,
-		authClient:         authClient,
 		lemonsqueezyClient: lemonsqueezyClient,
 		httpClient:         httpClient,
 	}
@@ -536,16 +532,12 @@ func (service *UserService) UpdateSubscription(ctx context.Context, params *even
 	return nil
 }
 
-// DeleteAuthUser deletes an entities.AuthContext from firebase
+// DeleteAuthUser removes the external auth identity for a user.
+// External auth is DID/API-key based, so there is nothing to delete remotely.
 func (service *UserService) DeleteAuthUser(ctx context.Context, userID entities.UserID) error {
 	ctx, span, ctxLogger := service.tracer.StartWithLogger(ctx, service.logger)
 	defer span.End()
 
-	if err := service.authClient.DeleteUser(ctx, userID.String()); err != nil {
-		msg := fmt.Sprintf("could not delete [entities.AuthContext] from firebase with ID [%s]", userID)
-		return service.tracer.WrapErrorSpan(span, stacktrace.Propagate(err, msg))
-	}
-
-	ctxLogger.Info(fmt.Sprintf("deleted [entities.AuthContext] from firebase for user with ID [%s]", userID))
+	ctxLogger.Info(fmt.Sprintf("no external auth identity to delete for user with ID [%s]", userID))
 	return nil
 }

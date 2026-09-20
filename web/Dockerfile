@@ -5,8 +5,8 @@ WORKDIR /app
 
 COPY package.json pnpm-lock.yaml ./
 
-# Install pnpm
-RUN npm install -g pnpm
+# Install pnpm pinned to packageManager (unpinned latest breaks musl version switch)
+RUN npm install -g pnpm@10.33.0
 
 RUN pnpm install --ignore-scripts && pnpm rebuild
 

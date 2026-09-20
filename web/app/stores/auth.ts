@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
-import type { User as FirebaseUser } from 'firebase/auth'
-import { setAuthHeader, setApiKey } from '~/composables/useApi'
+import { setApiKey } from '~/composables/useApi'
+import { shortDid } from '~/utils/didKey'
 import type { EntitiesUser } from '~~/shared/types/api'
 
 export interface AuthUser {
@@ -9,42 +9,65 @@ export interface AuthUser {
   id: string
 }
 
+// DID agents sign in with an API key instead of a Firebase ID token. Persist
+// the session so a reload keeps the user signed in without requiring Firebase.
+const DID_SESSION_KEY = 'httpsms_did_session'
+
+interface DidSession {
+  apiKey: string
+  user: EntitiesUser
+}
+
+function saveDidSession(session: DidSession) {
+  localStorage.setItem(DID_SESSION_KEY, JSON.stringify(session))
+}
+
+function loadDidSession(): DidSession | null {
+  try {
+    const raw = localStorage.getItem(DID_SESSION_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<DidSession>
+    if (!parsed.user || !parsed.user.api_key || !parsed.apiKey) return null
+    return parsed as DidSession
+  } catch (error) {
+    console.error(error)
+    return null
+  }
+}
+
+function clearDidSession() {
+  localStorage.removeItem(DID_SESSION_KEY)
+}
+
 export const useAuthStore = defineStore('auth', () => {
   const authStateChanged = ref(false)
   const authUser = ref<AuthUser | null>(null)
   const user = ref<EntitiesUser | null>(null)
   const { apiFetch } = useApi()
 
-  async function setAuthUserAction(newUser: AuthUser | null | undefined) {
-    const userChanged = newUser?.id !== authUser.value?.id
-    authUser.value = newUser ?? null
-    authStateChanged.value = true
-
-    if (userChanged && newUser !== null) {
-      await Promise.all([loadUser(), loadPhones()])
+  function applyDidSession(session: DidSession) {
+    setApiKey(session.apiKey)
+    authUser.value = {
+      id: session.user.id,
+      email: session.user.email,
+      displayName: shortDid(session.user.email),
     }
+    user.value = session.user
   }
 
-  async function onAuthStateChanged(firebaseUser: FirebaseUser | null) {
-    if (firebaseUser == null) {
+  async function restoreDidSession(): Promise<boolean> {
+    const session = loadDidSession()
+    if (!session) {
       authUser.value = null
       user.value = null
       authStateChanged.value = true
       setApiKey('')
-      return
+      return false
     }
-    setAuthHeader(await firebaseUser.getIdToken())
-    const { uid, email, displayName } = firebaseUser
-    authUser.value = { id: uid, email, displayName }
+    applyDidSession(session)
     authStateChanged.value = true
-  }
-
-  async function onIdTokenChanged(firebaseUser: FirebaseUser | null) {
-    if (firebaseUser == null) {
-      setApiKey('')
-      return
-    }
-    setAuthHeader(await firebaseUser.getIdToken())
+    await loadPhones()
+    return true
   }
 
   async function loadUser() {
@@ -93,6 +116,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function resetState() {
+    clearDidSession()
     user.value = null
     authUser.value = null
     authStateChanged.value = true
@@ -104,17 +128,24 @@ export const useAuthStore = defineStore('auth', () => {
     return phonesStore.loadPhones(false)
   }
 
+  // Complete a DID sign-in with the user returned by /v1/did-auth/verify.
+  async function signInWithDid(session: DidSession) {
+    saveDidSession(session)
+    applyDidSession(session)
+    authStateChanged.value = true
+    await loadPhones()
+  }
+
   return {
     authStateChanged,
     authUser,
     user,
-    setAuthUserAction,
-    onAuthStateChanged,
-    onIdTokenChanged,
     loadUser,
     updateUser,
     deleteUserAccount,
     rotateApiKey,
     resetState,
+    restoreDidSession,
+    signInWithDid,
   }
 })

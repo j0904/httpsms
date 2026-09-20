@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import Pusher from 'pusher-js'
 import { useDisplay } from 'vuetify'
-import { setAuthHeader } from '~/composables/useApi'
-import { getAuth } from 'firebase/auth'
 
 const route = useRoute()
 const config = useRuntimeConfig()
@@ -47,10 +45,6 @@ function startPoller() {
     appStore.setPolling(true)
 
     if (authStore.authUser && phonesStore.owner) {
-      const auth = getAuth()
-      const token = await auth.currentUser?.getIdToken()
-      if (token) setAuthHeader(token)
-
       await Promise.all([
         phonesStore.loadPhones(true),
         threadsStore.loadThreads(),

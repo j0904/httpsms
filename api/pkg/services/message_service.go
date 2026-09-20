@@ -109,6 +109,28 @@ func (service *MessageService) GetOutstanding(ctx context.Context, params Messag
 	return message, nil
 }
 
+// MessageListOutstandingParams parameters for listing outstanding messages
+type MessageListOutstandingParams struct {
+	UserID       entities.UserID
+	PhoneNumbers []string
+	Limit        int
+}
+
+// ListOutstandingIDs fetches IDs of messages still to be sent by the phone.
+// Statuses are left untouched: the phone claims each message with
+// GetOutstanding before sending.
+func (service *MessageService) ListOutstandingIDs(ctx context.Context, params MessageListOutstandingParams) ([]uuid.UUID, error) {
+	ctx, span := service.tracer.Start(ctx)
+	defer span.End()
+
+	ids, err := service.repository.ListOutstandingIDs(ctx, params.UserID, params.PhoneNumbers, params.Limit)
+	if err != nil {
+		msg := fmt.Sprintf("could not list outstanding messages with params [%s]", spew.Sdump(params))
+		return nil, service.tracer.WrapErrorSpan(span, stacktrace.Propagate(err, msg))
+	}
+	return ids, nil
+}
+
 // DeleteAllForUser deletes all entities.Message for an entities.UserID.
 func (service *MessageService) DeleteAllForUser(ctx context.Context, userID entities.UserID) error {
 	ctx, span, ctxLogger := service.tracer.StartWithLogger(ctx, service.logger)
