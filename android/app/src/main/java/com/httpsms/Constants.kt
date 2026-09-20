@@ -20,6 +20,12 @@ class Constants {
 
         const val TIMESTAMP_PATTERN = "yyyy-MM-dd'T'HH:mm:ss.SSS'000000'ZZZZZ"
 
+        // Outbound delivery is push-like without FCM: the foreground service
+        // long-polls /v1/messages/outstanding/list?wait=… and the server holds
+        // the request until a message is queued (or this many seconds elapse).
+        // Must stay below the client read timeout in HttpSmsApiService.
+        const val MESSAGE_LONG_POLL_WAIT_SECONDS = 25L
+
         const val MAX_MMS_ATTACHMENT_SIZE: Long = (3L * 1024 * 1024) / 2
     }
 }

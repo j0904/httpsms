@@ -15,6 +15,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.URI
 import java.net.URL
+import java.util.concurrent.TimeUnit
 import java.util.logging.Level
 import java.util.logging.Logger.getLogger
 
@@ -23,7 +24,12 @@ class HttpSmsApiService(private val apiKey: String, private val baseURL: URI) {
     private val apiKeyHeader = "x-api-key"
     private val clientVersionHeader = "X-Client-Version"
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
-    private val client = OkHttpClient.Builder().retryOnConnectionFailure(true).build()
+    // read timeout exceeds the server long-poll wait (MESSAGE_LONG_POLL_WAIT_SECONDS)
+    private val client = OkHttpClient.Builder()
+        .retryOnConnectionFailure(true)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(Constants.MESSAGE_LONG_POLL_WAIT_SECONDS + 15, TimeUnit.SECONDS)
+        .build()
 
     init {
         getLogger(OkHttpClient::class.java.name).level = Level.FINE
@@ -62,9 +68,16 @@ class HttpSmsApiService(private val apiKey: String, private val baseURL: URI) {
         return null
     }
 
-    fun getOutstandingMessageIDs(): List<String> {
+    // waitSeconds > 0 turns this into a long-poll: the server holds the request
+    // until a message is queued for this user or the wait elapses.
+    fun getOutstandingMessageIDs(waitSeconds: Long = 0): List<String> {
+        val path = if (waitSeconds > 0) {
+            "/v1/messages/outstanding/list?wait=$waitSeconds"
+        } else {
+            "/v1/messages/outstanding/list"
+        }
         val request: Request = Request.Builder()
-            .url(resolveURL("/v1/messages/outstanding/list"))
+            .url(resolveURL(path))
             .header(apiKeyHeader, apiKey)
             .header(clientVersionHeader, BuildConfig.VERSION_NAME)
             .build()

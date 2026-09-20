@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/NdoleStudio/httpsms/pkg/entities"
 
+	"github.com/NdoleStudio/httpsms/pkg/notifier"
 	"github.com/NdoleStudio/httpsms/pkg/repositories"
 	"github.com/google/uuid"
 
@@ -29,6 +31,7 @@ type MessageHandler struct {
 	billingService *services.BillingService
 	validator      *validators.MessageHandlerValidator
 	service        *services.MessageService
+	notifier       *notifier.MessageNotifier
 }
 
 // NewMessageHandler creates a new MessageHandler
@@ -38,6 +41,7 @@ func NewMessageHandler(
 	validator *validators.MessageHandlerValidator,
 	billingService *services.BillingService,
 	service *services.MessageService,
+	messageNotifier *notifier.MessageNotifier,
 ) (h *MessageHandler) {
 	return &MessageHandler{
 		logger:         logger.WithService(fmt.Sprintf("%T", h)),
@@ -45,6 +49,7 @@ func NewMessageHandler(
 		validator:      validator,
 		billingService: billingService,
 		service:        service,
+		notifier:       messageNotifier,
 	}
 }
 
@@ -112,6 +117,9 @@ func (h *MessageHandler) PostSend(c fiber.Ctx) error {
 		return h.responseInternalServerError(c)
 	}
 
+	// wake any long-polling phone for this user so it picks the message up now
+	h.notifier.Notify(h.userIDFomContext(c))
+
 	return h.responseOK(c, "message added to queue", message)
 }
 
@@ -174,6 +182,10 @@ func (h *MessageHandler) BulkSend(c fiber.Ctx) error {
 	}
 
 	wg.Wait()
+	if count.Load() > 0 {
+		// wake any long-polling phone for this user
+		h.notifier.Notify(h.userIDFomContext(c))
+	}
 	return h.responseOK(c, fmt.Sprintf("%d out of %d messages processed successfully", count.Load(), len(responses)), responses)
 }
 
@@ -240,18 +252,59 @@ func (h *MessageHandler) GetOutstanding(c fiber.Ctx) error {
 // @Failure 	 401    	{object}	responses.Unauthorized
 // @Failure      500    	{object}	responses.InternalServerError
 // @Router       /messages/outstanding/list [get]
+// maxLongPollSeconds caps the `wait` long-poll so proxies (Caddy) and mobile
+// NAT do not drop the held connection.
+const maxLongPollSeconds = 25
+
 func (h *MessageHandler) ListOutstandingIDs(c fiber.Ctx) error {
 	ctx, span := h.tracer.StartFromFiberCtx(c)
 	defer span.End()
 
 	ctxLogger := h.tracer.CtxLogger(h.logger, span)
-
 	authCtx := h.userFromContext(c)
-	ids, err := h.service.ListOutstandingIDs(ctx, services.MessageListOutstandingParams{
-		UserID:       authCtx.ID,
-		PhoneNumbers: authCtx.PhoneNumbers,
-		Limit:        100,
-	})
+
+	list := func() ([]uuid.UUID, error) {
+		return h.service.ListOutstandingIDs(ctx, services.MessageListOutstandingParams{
+			UserID:       authCtx.ID,
+			PhoneNumbers: authCtx.PhoneNumbers,
+			Limit:        100,
+		})
+	}
+
+	ids, err := list()
+	if err != nil {
+		msg := fmt.Sprintf("cannot list outstanding messages [%s]", c.OriginalURL())
+		ctxLogger.Error(stacktrace.Propagate(err, msg))
+		return h.responseInternalServerError(c)
+	}
+
+	// Long-poll: when the caller asks to wait and there is nothing to send, hold
+	// the request until a message is queued for this user or the timeout fires,
+	// then re-check. This gives phones push-like latency with no push service.
+	wait := 0
+	if raw := c.Query("wait"); raw != "" {
+		if seconds, parseErr := strconv.Atoi(raw); parseErr == nil && seconds > 0 {
+			wait = min(seconds, maxLongPollSeconds)
+		}
+	}
+	if len(ids) > 0 || wait == 0 {
+		return h.responseOK(c, "outstanding message IDs fetched successfully", ids)
+	}
+
+	wake, cancel := h.notifier.Subscribe(authCtx.ID)
+	defer cancel()
+
+	timer := time.NewTimer(time.Duration(wait) * time.Second)
+	defer timer.Stop()
+
+	select {
+	case <-wake:
+	case <-timer.C:
+	case <-ctx.Done():
+		return nil
+	}
+
+	ids, err = list()
 	if err != nil {
 		msg := fmt.Sprintf("cannot list outstanding messages [%s]", c.OriginalURL())
 		ctxLogger.Error(stacktrace.Propagate(err, msg))

@@ -5,11 +5,21 @@ import android.content.Context
 import android.content.Intent
 import android.os.IBinder
 import android.widget.Toast
+import com.httpsms.Constants
 import com.httpsms.MainActivity
+import com.httpsms.MessagePoller
 import com.httpsms.R
+import com.httpsms.Settings
 import timber.log.Timber
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 class StickyNotificationService: Service() {
+    private var executor: ExecutorService? = null
+
+    @Volatile
+    private var running = false
+
     override fun onBind(intent: Intent?): IBinder? {
         Timber.d("Some component want to bind with the service [${intent?.action}]")
         return null
@@ -20,6 +30,24 @@ class StickyNotificationService: Service() {
         super.onCreate()
         val notification = createNotification()
         startForeground(1, notification)
+
+        // Push-like delivery without FCM: long-poll the server, which holds the
+        // request until a message is queued for this user (or the wait elapses),
+        // then enqueue a SendSmsWorker per message. WorkManager's periodic
+        // minimum is 15 minutes, so this loop lives in the foreground service.
+        running = true
+        val worker = Executors.newSingleThreadExecutor()
+        worker.submit {
+            while (running) {
+                pollOnce()
+                try {
+                    Thread.sleep(POLL_GAP_MS)
+                } catch (exception: InterruptedException) {
+                    break
+                }
+            }
+        }
+        executor = worker
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -29,11 +57,30 @@ class StickyNotificationService: Service() {
     }
 
     override fun onDestroy() {
+        running = false
+        executor?.shutdownNow()
+        executor = null
         super.onDestroy()
         Timber.d("The service has been destroyed")
         Toast.makeText(this, "Service destroyed", Toast.LENGTH_SHORT).show()
     }
 
+    private fun pollOnce() {
+        try {
+            if (!Settings.isLoggedIn(applicationContext)) {
+                Thread.sleep(IDLE_GAP_MS)
+                return
+            }
+            MessagePoller.pollOutstanding(applicationContext, Constants.MESSAGE_LONG_POLL_WAIT_SECONDS)
+        } catch (exception: Exception) {
+            Timber.e(exception, "Failed to poll outstanding messages")
+            try {
+                Thread.sleep(IDLE_GAP_MS)
+            } catch (interruptedException: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
+        }
+    }
 
     private fun createNotification(): Notification {
         val notificationChannelId = "sticky_notification_channel"
@@ -71,5 +118,12 @@ class StickyNotificationService: Service() {
             .setOngoing(true)
             .setSmallIcon(R.drawable.ic_stat_name)
             .build()
+    }
+
+    companion object {
+        // gap between long-polls; keeps a short pause after a burst so the
+        // phone does not re-fetch the same IDs before they are claimed
+        private const val POLL_GAP_MS = 1500L
+        private const val IDLE_GAP_MS = 2000L
     }
 }

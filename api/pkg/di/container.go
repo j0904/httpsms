@@ -57,6 +57,7 @@ import (
 
 	"github.com/NdoleStudio/httpsms/pkg/entities"
 	"github.com/NdoleStudio/httpsms/pkg/listeners"
+	"github.com/NdoleStudio/httpsms/pkg/notifier"
 	"github.com/NdoleStudio/httpsms/pkg/repositories"
 	"github.com/NdoleStudio/httpsms/pkg/services"
 	swagger "github.com/gofiber/contrib/v3/swaggo"
@@ -88,6 +89,7 @@ type Container struct {
 	userRistrettoCache   *ristretto.Cache[string, entities.AuthContext]
 	phoneRistrettoCache  *ristretto.Cache[string, *entities.Phone]
 	inMemoryCache        cache.Cache
+	messageNotifier      *notifier.MessageNotifier
 }
 
 // NewLiteContainer creates a Container without any routes or listeners
@@ -1071,7 +1073,20 @@ func (container *Container) MessageHandler() (handler *handlers.MessageHandler) 
 		container.MessageHandlerValidator(),
 		container.BillingService(),
 		container.MessageService(),
+		container.MessageNotifier(),
 	)
+}
+
+// MessageNotifier creates a singleton in-process notifier shared by every
+// MessageHandler instance (the handler is created more than once, but the
+// long-poll subscribers and the send notifications must meet on one instance).
+func (container *Container) MessageNotifier() *notifier.MessageNotifier {
+	if container.messageNotifier != nil {
+		return container.messageNotifier
+	}
+	container.logger.Debug("creating notifier.MessageNotifier")
+	container.messageNotifier = notifier.NewMessageNotifier()
+	return container.messageNotifier
 }
 
 // BulkMessageHandler creates a new instance of handlers.BulkMessageHandler
