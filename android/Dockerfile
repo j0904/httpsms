@@ -22,5 +22,8 @@ WORKDIR /app
 COPY android/ /app/
 COPY .git/ /app/.git/
 
+# APK_TASK=assembleDebug for an auto-signed sideloadable build;
+# assembleRelease is signed only with android/app/keystore.properties.
+ARG APK_TASK=assembleRelease
 RUN chmod +x gradlew \
-    && ./gradlew assembleRelease --no-daemon
+    && ./gradlew $APK_TASK --no-daemon

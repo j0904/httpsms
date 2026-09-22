@@ -6,6 +6,7 @@
 android/app/debug/
 *main.exe*
 android/app/release/
+/out/
 
 tests/firebase-credentials.json
 tests/emulator/emulator.exe
