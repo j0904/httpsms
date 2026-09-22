@@ -8,13 +8,13 @@
 # Env:
 #   S3_ENDPOINT  MinIO endpoint (default https://minio-s1001.bigt.ai)
 #   S3_ACCESS_KEY / S3_SECRET_KEY (required)
-#   S3_BUCKET    (default aifeeds-content)
-#   S3_PREFIX    object prefix (default httpsms)
+#   S3_BUCKET    (default httpsms — the bucket the docs link serves from)
+#   S3_PREFIX    object prefix inside the bucket (default empty = bucket root)
 #   OUT_DIR      local APK dir (default ./out)
 #   IMAGE        builder image name (default httpsms-apk)
 #
-# Uploads out/HttpSms-<type>-<sha>.apk plus the stable httpsms/HttpSms.apk
-# alias the docs link to. Debug and release signatures differ: switching
+# Uploads out/HttpSms-<type>-<sha>.apk plus the stable HttpSms.apk alias
+# the docs link to. Debug and release signatures differ: switching
 # between them on a phone requires uninstalling first.
 set -euo pipefail
 
@@ -32,8 +32,9 @@ for a in "$@"; do
 done
 
 S3_ENDPOINT="${S3_ENDPOINT:-https://minio-s1001.bigt.ai}"
-S3_BUCKET="${S3_BUCKET:-aifeeds-content}"
-S3_PREFIX="${S3_PREFIX:-httpsms}"
+S3_BUCKET="${S3_BUCKET:-httpsms}"
+S3_PREFIX="${S3_PREFIX:-}"
+S3_KEY_PREFIX="${S3_PREFIX:+$S3_PREFIX/}"
 OUT_DIR="${OUT_DIR:-$ROOT/out}"
 IMAGE="${IMAGE:-httpsms-apk}"
 : "${S3_ACCESS_KEY:?set S3_ACCESS_KEY}"
@@ -61,18 +62,18 @@ fi
 NAME="$(basename "$OUT_APK")"
 docker run --rm \
   -e S3_ENDPOINT="$S3_ENDPOINT" -e S3_ACCESS_KEY="$S3_ACCESS_KEY" -e S3_SECRET_KEY="$S3_SECRET_KEY" \
-  -e S3_BUCKET="$S3_BUCKET" -e S3_PREFIX="$S3_PREFIX" -e NAME="$NAME" \
+  -e S3_BUCKET="$S3_BUCKET" -e S3_KEY_PREFIX="$S3_KEY_PREFIX" -e NAME="$NAME" \
   -v "$OUT_DIR:/out:ro" --entrypoint /bin/sh quay.io/minio/mc -c \
   'mc alias set up "$S3_ENDPOINT" "$S3_ACCESS_KEY" "$S3_SECRET_KEY" >/dev/null && \
-   mc cp "/out/$NAME" "up/$S3_BUCKET/$S3_PREFIX/$NAME"' \
+   mc cp "/out/$NAME" "up/$S3_BUCKET/$S3_KEY_PREFIX$NAME"' \
   || { echo "upload failed — check S3_* creds" >&2; exit 1; }
 docker run --rm \
   -e S3_ENDPOINT="$S3_ENDPOINT" -e S3_ACCESS_KEY="$S3_ACCESS_KEY" -e S3_SECRET_KEY="$S3_SECRET_KEY" \
-  -e S3_BUCKET="$S3_BUCKET" -e S3_PREFIX="$S3_PREFIX" -e NAME="$NAME" \
+  -e S3_BUCKET="$S3_BUCKET" -e S3_KEY_PREFIX="$S3_KEY_PREFIX" -e NAME="$NAME" \
   -v "$OUT_DIR:/out:ro" --entrypoint /bin/sh quay.io/minio/mc -c \
   'mc alias set up "$S3_ENDPOINT" "$S3_ACCESS_KEY" "$S3_SECRET_KEY" >/dev/null && \
-   mc cp "up/$S3_BUCKET/$S3_PREFIX/$NAME" "up/$S3_BUCKET/$S3_PREFIX/HttpSms.apk"' \
+   mc cp "up/$S3_BUCKET/$S3_KEY_PREFIX$NAME" "up/$S3_BUCKET/${S3_KEY_PREFIX}HttpSms.apk"' \
   || { echo "stable-alias copy failed" >&2; exit 1; }
 
-echo "uploaded: $S3_ENDPOINT/$S3_BUCKET/$S3_PREFIX/$NAME"
-echo "uploaded: $S3_ENDPOINT/$S3_BUCKET/$S3_PREFIX/HttpSms.apk"
+echo "uploaded: $S3_ENDPOINT/$S3_BUCKET/${S3_KEY_PREFIX}$NAME"
+echo "uploaded: $S3_ENDPOINT/$S3_BUCKET/${S3_KEY_PREFIX}HttpSms.apk"
