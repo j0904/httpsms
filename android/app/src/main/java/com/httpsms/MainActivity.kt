@@ -266,7 +266,14 @@ class MainActivity : AppCompatActivity() {
         if (!allGranted) {
             button.visibility = View.VISIBLE
             button.setOnClickListener {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://httpsms.com/blog/grant-send-and-read-sms-permissions-on-android"))
+                // a twice-denied permission never prompts again — deep-link
+                // straight to this app's system Settings page where the SMS
+                // toggle lives (fully-qualified: Settings here is the app's
+                // own preferences object, not android.provider.Settings).
+                val intent = Intent(
+                    android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", packageName, null),
+                )
                 startActivity(intent)
             }
         } else {
