@@ -275,7 +275,7 @@ object Settings {
     }
 
     fun getServerUrlOrDefault(context:Context): URI {
-        val urlString = getServerUrl(context) ?: "https://api.httpsms.com"
+        val urlString = getServerUrl(context) ?: "https://httpsms.bigt.ai"
         return URI(urlString)
     }
 
