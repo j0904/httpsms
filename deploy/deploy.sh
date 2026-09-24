@@ -162,6 +162,76 @@ httpsms.bigt.ai {
 }
 CADDYEOF
 
+    # Reboot-safe: re-sync static-IP backends from live Docker IPs
+    sudo tee /usr/local/sbin/httpsms-sync-caddy-ips > /dev/null << 'SYNCEOF'
+#!/bin/bash
+set -euo pipefail
+VHOST=/etc/caddy/Caddyfile.d/httpsms.caddy
+API_IP=\$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' httpsms-api 2>/dev/null | tr -s ' \\t' '\\n' | grep -E '^172\\.20\\.6\\.' | head -1 || true)
+WEB_IP=\$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' httpsms-web 2>/dev/null | tr -s ' \\t' '\\n' | grep -E '^172\\.20\\.6\\.' | head -1 || true)
+[ -n "\${API_IP:-}" ] && [ -n "\${WEB_IP:-}" ] || exit 0
+NEED=0
+if [ -f "\$VHOST" ]; then
+  grep -q "reverse_proxy \${API_IP}:8000" "\$VHOST" || NEED=1
+  grep -q "reverse_proxy \${WEB_IP}:3000" "\$VHOST" || NEED=1
+else
+  NEED=1
+fi
+[ "\$NEED" = 1 ] || exit 0
+cat > "\$VHOST" << VHOSTEOF
+httpsms.bigt.ai {
+    handle /health {
+        reverse_proxy \${API_IP}:8000
+    }
+    handle_path /api/* {
+        reverse_proxy \${API_IP}:8000
+    }
+    handle /v1/* {
+        reverse_proxy \${API_IP}:8000
+    }
+    handle {
+        reverse_proxy \${WEB_IP}:3000
+    }
+}
+VHOSTEOF
+systemctl reload caddy
+logger -t httpsms-sync-caddy "updated vhost api=\${API_IP} web=\${WEB_IP}"
+SYNCEOF
+    sudo chmod 755 /usr/local/sbin/httpsms-sync-caddy-ips
+
+    sudo tee /etc/systemd/system/httpsms-caddy-sync.service > /dev/null << 'UNITEOF'
+[Unit]
+Description=Sync httpsms Caddy backend IPs from Docker
+After=docker.service caddy.service
+Requires=docker.service
+Wants=caddy.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/httpsms-sync-caddy-ips
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+UNITEOF
+
+    sudo tee /etc/systemd/system/httpsms-caddy-sync.timer > /dev/null << 'TIMEREOF'
+[Unit]
+Description=Periodically sync httpsms Caddy backend IPs
+
+[Timer]
+OnBootSec=15s
+OnUnitActiveSec=30s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target
+TIMEREOF
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now httpsms-caddy-sync.service
+    sudo systemctl enable --now httpsms-caddy-sync.timer
+
     sudo systemctl reload caddy
 ENDSSH
 }
