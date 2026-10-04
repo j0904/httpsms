@@ -44,6 +44,9 @@ func (input *MessageReceive) Sanitize() MessageReceive {
 	if strings.TrimSpace(string(input.SIM)) == "" || input.SIM == ("DEFAULT") {
 		input.SIM = entities.SIM1
 	}
+	if !input.Encrypted {
+		input.Content = repairMisencodedContent(input.Content)
+	}
 	return *input
 }
 

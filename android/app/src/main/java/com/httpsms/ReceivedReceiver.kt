@@ -45,6 +45,12 @@ class ReceivedReceiver: BroadcastReceiver()
             smsBody += smsMessage.messageBody
         }
 
+        val repairedBody = SmsTextRepair.repair(smsBody)
+        if (repairedBody != smsBody) {
+            Timber.w("repaired mis-encoded SMS body from [%s] (length [%d] -> [%d])", smsSender, smsBody.length, repairedBody.length)
+            smsBody = repairedBody
+        }
+
         val (sim, owner) = getSimAndOwner(context, intent)
 
         if (!Settings.isIncomingMessageEnabled(context, sim)) {
