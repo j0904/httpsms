@@ -178,6 +178,27 @@
                 tools:ignore="TouchTargetSizeCheck" />
 
 
+            <TextView
+                android:id="@+id/settingsAppVersion"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:gravity="center"
+                android:textColor="@color/black"
+                android:textSize="14sp"
+                tools:text="httpsms.com - 4241169e" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/settingsCheckUpdatesButton"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:minHeight="48dp"
+                android:text="@string/check_for_updates"
+                android:textSize="16sp"
+                tools:ignore="TextContrastCheck" />
+
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/settingsLogoutButton"
                 style="@style/Widget.MaterialComponents.Button.Icon"

@@ -10,6 +10,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.telephony.PhoneNumberUtils
 import android.view.View
@@ -61,6 +63,7 @@ class MainActivity : AppCompatActivity() {
         setHeartbeatListener(this)
         setSmsPermissionListener()
         setBatteryOptimizationListener()
+        scheduleUpdateCheck()
     }
 
     override fun onStart() {
@@ -80,6 +83,19 @@ class MainActivity : AppCompatActivity() {
     private fun setVersion() {
         val appVersionView = findViewById<TextView>(R.id.mainAppVersion)
         appVersionView.text = getString(R.string.app_version, BuildConfig.VERSION_NAME)
+    }
+
+    private fun scheduleUpdateCheck() {
+        // Let the first frame render before the network check, then prompt only
+        // when a strictly newer build is published (Updater.check no-ops off-line).
+        Handler(Looper.getMainLooper()).postDelayed({ checkForUpdate() }, 4000L)
+    }
+
+    private fun checkForUpdate() {
+        if (isFinishing || isDestroyed) return
+        Updater.check(this) { result ->
+            if (result is Updater.CheckResult.Available) Updater.prompt(this, result.manifest)
+        }
     }
 
     private fun setCardContent(context: Context) {

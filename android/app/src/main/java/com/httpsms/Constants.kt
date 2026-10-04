@@ -27,5 +27,9 @@ class Constants {
         const val MESSAGE_LONG_POLL_WAIT_SECONDS = 25L
 
         const val MAX_MMS_ATTACHMENT_SIZE: Long = (3L * 1024 * 1024) / 2
+
+        // Public-read bucket holding the OTA manifest and APK that
+        // deploy.apk.sh publishes; the updater reads it without credentials.
+        const val OTA_BASE_URL = "https://minio-s1001.bigt.ai/httpsms"
     }
 }

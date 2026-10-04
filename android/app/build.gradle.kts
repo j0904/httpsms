@@ -17,6 +17,12 @@ val gitHash = providers.exec {
     commandLine("git", "rev-parse", "--short", "HEAD")
 }.standardOutput.asText.map { it.trim() }
 
+// The updater compares versionCode against the release manifest, so it has to
+// increase on every build — the git hash in versionName is not ordered.
+val gitCommitCount = providers.exec {
+    commandLine("git", "rev-list", "--count", "HEAD")
+}.standardOutput.asText.map { it.trim() }
+
 android {
     compileSdk = 36
 
@@ -24,29 +30,35 @@ android {
         applicationId = "com.httpsms"
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
+        versionCode = gitCommitCount.getOrElse("1").toInt()
         versionName = gitHash.getOrElse("unknown")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // One pinned certificate across every variant (android/signing.sha256): an
+    // APK only installs over a build signed with the same key, so an
+    // auto-generated debug key would make every update a manual reinstall.
+    val appSigningConfig = if (keystoreProperties.isNotEmpty()) {
+        signingConfigs.create("release") {
+            storeFile = file(keystoreProperties["storeFile"] as String)
+            storePassword = keystoreProperties["storePassword"] as String
+            keyAlias = keystoreProperties["keyAlias"] as String
+            keyPassword = keystoreProperties["keyPassword"] as String
+        }
+    } else {
+        null
     }
 
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["sentryEnvironment"] = "development"
+            appSigningConfig?.let { signingConfig = it }
         }
         getByName("release") {
             manifestPlaceholders["sentryEnvironment"] = "production"
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = if (keystoreProperties.isNotEmpty()) {
-                signingConfigs.create("release") {
-                    storeFile = file(keystoreProperties["storeFile"] as String)
-                    storePassword = keystoreProperties["storePassword"] as String
-                    keyAlias = keystoreProperties["keyAlias"] as String
-                    keyPassword = keystoreProperties["keyPassword"] as String
-                }
-            } else {
-                null
-            }
+            signingConfig = appSigningConfig
         }
     }
     compileOptions {

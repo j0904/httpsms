@@ -32,4 +32,14 @@
     <string name="enable_debug_logs">Enable debug logs</string>
     <string name="enable_incoming_call_events_sim1">Enable SIM1 missed call events</string>
     <string name="enable_sim2_incoming_call_events">Enable SIM2 missed call events</string>
+    <string name="settings_app_version">App version %1$s</string>
+    <string name="check_for_updates">Check for updates</string>
+    <string name="update_up_to_date">You have the latest version (%1$s)</string>
+    <string name="update_unavailable">Could not reach the update server</string>
+    <string name="update_available_title">Update available</string>
+    <string name="update_available_message">Version %1$s is available (you have %2$s).</string>
+    <string name="update_install">Install</string>
+    <string name="update_later">Later</string>
+    <string name="update_sha_mismatch">Update verification failed</string>
+    <string name="update_download_failed">Update download failed</string>
 </resources>

@@ -3,6 +3,8 @@ package com.httpsms
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.widget.doAfterTextChanged
 import com.google.android.material.appbar.MaterialToolbar
@@ -19,6 +21,8 @@ class SettingsActivity : AppCompatActivity() {
         setContentView(R.layout.activity_settings)
         fillSettings(this)
         registerListeners()
+        findViewById<TextView>(R.id.settingsAppVersion)
+            .text = getString(R.string.settings_app_version, BuildConfig.VERSION_NAME)
     }
 
     private fun fillSettings(context: Context) {
@@ -116,6 +120,23 @@ class SettingsActivity : AppCompatActivity() {
     private fun registerListeners() {
         appToolbar().setOnClickListener { onBackClicked() }
         findViewById<MaterialButton>(R.id.settingsLogoutButton).setOnClickListener { onLogoutClick() }
+        findViewById<MaterialButton>(R.id.settingsCheckUpdatesButton).setOnClickListener { onCheckUpdatesClick() }
+    }
+
+    private fun onCheckUpdatesClick() {
+        Timber.d("check for updates clicked")
+        val button = findViewById<MaterialButton>(R.id.settingsCheckUpdatesButton)
+        button.isEnabled = false
+        Updater.check(this) { result ->
+            button.isEnabled = true
+            when (result) {
+                is Updater.CheckResult.Available -> Updater.prompt(this, result.manifest)
+                Updater.CheckResult.UpToDate ->
+                    Toast.makeText(this, getString(R.string.update_up_to_date, BuildConfig.VERSION_NAME), Toast.LENGTH_LONG).show()
+                Updater.CheckResult.Unavailable ->
+                    Toast.makeText(this, R.string.update_unavailable, Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     private fun onBackClicked() {
