@@ -6,10 +6,10 @@
 #   ./deploy.apk.sh --skip-build # upload the APK already in out/
 #
 # Env:
-#   S3_ENDPOINT  MinIO endpoint (default https://minio-s1001.bigt.ai)
+#   S3_ENDPOINT  MinIO endpoint (default https://minio-s1002.bigt.ai)
 #   S3_ACCESS_KEY / S3_SECRET_KEY (required)
-#   S3_BUCKET    (default httpsms — the bucket the docs link serves from)
-#   S3_PREFIX    object prefix inside the bucket (default empty = bucket root)
+#   S3_BUCKET    (default apps — the shared release bucket)
+#   S3_PREFIX    object prefix inside the bucket (default httpsms/apk)
 #   OUT_DIR      local APK dir (default ./out)
 #   IMAGE        builder image name (default httpsms-apk)
 #   MC_IMAGE     minio client image (default quay.io/minio/mc; use
@@ -38,9 +38,9 @@ for a in "$@"; do
   esac
 done
 
-S3_ENDPOINT="${S3_ENDPOINT:-https://minio-s1001.bigt.ai}"
-S3_BUCKET="${S3_BUCKET:-httpsms}"
-S3_PREFIX="${S3_PREFIX:-}"
+S3_ENDPOINT="${S3_ENDPOINT:-https://minio-s1002.bigt.ai}"
+S3_BUCKET="${S3_BUCKET:-apps}"
+S3_PREFIX="${S3_PREFIX:-httpsms/apk}"
 S3_KEY_PREFIX="${S3_PREFIX:+$S3_PREFIX/}"
 OUT_DIR="${OUT_DIR:-$ROOT/out}"
 IMAGE="${IMAGE:-httpsms-apk}"

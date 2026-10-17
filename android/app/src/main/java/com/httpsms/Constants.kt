@@ -30,6 +30,6 @@ class Constants {
 
         // Public-read bucket holding the OTA manifest and APK that
         // deploy.apk.sh publishes; the updater reads it without credentials.
-        const val OTA_BASE_URL = "https://minio-s1001.bigt.ai/httpsms"
+        const val OTA_BASE_URL = "https://s3.bigt.ai/apps/httpsms/apk"
     }
 }

@@ -10,7 +10,7 @@ import org.junit.Test
 class OtaTest {
     private val json = """
         {"versionName":"4241169e","versionCode":42,
-         "url":"https://minio-s1001.bigt.ai/httpsms/HttpSms-debug-4241169e.apk",
+         "url":"https://s3.bigt.ai/apps/httpsms/apk/HttpSms-debug-4241169e.apk",
          "sha256":"241158da4a5426401bd9bb83198edc8dcaf5578fe896826d3c464e4a2fabe171",
          "mandatory":true}
     """.trimIndent()
@@ -21,7 +21,7 @@ class OtaTest {
         assertNotNull(manifest)
         assertEquals("4241169e", manifest!!.versionName)
         assertEquals(42, manifest.versionCode)
-        assertEquals("https://minio-s1001.bigt.ai/httpsms/HttpSms-debug-4241169e.apk", manifest.url)
+        assertEquals("https://s3.bigt.ai/apps/httpsms/apk/HttpSms-debug-4241169e.apk", manifest.url)
         assertEquals("241158da4a5426401bd9bb83198edc8dcaf5578fe896826d3c464e4a2fabe171", manifest.sha256)
         assertTrue(manifest.mandatory)
     }
@@ -49,12 +49,12 @@ class OtaTest {
     @Test
     fun manifestUrlFollowsBuildType() {
         assertEquals(
-            "https://minio-s1001.bigt.ai/httpsms/httpsms-debug-latest.json",
-            Ota.manifestUrl("https://minio-s1001.bigt.ai/httpsms", isDebug = true),
+            "https://s3.bigt.ai/apps/httpsms/apk/httpsms-debug-latest.json",
+            Ota.manifestUrl("https://s3.bigt.ai/apps/httpsms/apk", isDebug = true),
         )
         assertEquals(
-            "https://minio-s1001.bigt.ai/httpsms/httpsms-release-latest.json",
-            Ota.manifestUrl("https://minio-s1001.bigt.ai/httpsms/", isDebug = false),
+            "https://s3.bigt.ai/apps/httpsms/apk/httpsms-release-latest.json",
+            Ota.manifestUrl("https://s3.bigt.ai/apps/httpsms/apk/", isDebug = false),
         )
     }
 }
