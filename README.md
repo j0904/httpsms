@@ -36,14 +36,13 @@ Quick Start Guide 👉 [https://docs.httpsms.com](https://docs.httpsms.com)
 - [Flows](#flows)
   - [Sending an SMS Message](#sending-an-sms-message)
 - [Self Host Setup - Docker](#self-host-setup---docker)
-  - [1. Setup Firebase](#1-setup-firebase)
-  - [2. Setup SMTP Email service](#2-setup-smtp-email-service)
-  - [3. Setup Cloudflare Turnstile](#3-setup-cloudflare-turnstile)
-  - [4. Download the code](#4-download-the-code)
-  - [5. Setup the environment variables](#5-setup-the-environment-variables)
-  - [6. Build and Run](#6-build-and-run)
-  - [7. Create the System User](#7-create-the-system-user)
-  - [8. Build the Android App.](#8-build-the-android-app)
+  - [1. Setup SMTP Email service](#1-setup-smtp-email-service)
+  - [2. Setup Cloudflare Turnstile](#2-setup-cloudflare-turnstile)
+  - [3. Download the code](#3-download-the-code)
+  - [4. Setup the environment variables](#4-setup-the-environment-variables)
+  - [5. Build and Run](#5-build-and-run)
+  - [6. Create the System User](#6-create-the-system-user)
+  - [7. Build the Android App.](#7-build-the-android-app)
 - [Integration Testing](#integration-testing)
 - [License](#license)
 
@@ -58,7 +57,7 @@ solution that could help me send/receive SMS messages using a mobile phone using
 ## Web UI
 
 The web interface https://httpsms.com is built using [Nuxt](https://nuxtjs.org/) and [Vuetify](https://vuetifyjs.com/en/).
-It is hosted as a single page application on firebase. The source code is in the [web](./web) directory
+It is a single page application (deployed to Cloudflare Pages). The source code is in the [web](./web) directory
 
 ## API
 
@@ -111,7 +110,7 @@ call the API to send messages to 100 people, It will only send the messages at a
 
 ### Message Expiration
 
-Sometimes it happens that the phone doesn't get the push notification in time and I can't send the SMS message. It is
+Sometimes it happens that the phone doesn't pick up the queued message in time and I can't send the SMS message. It is
 possible to set a timeout for which a message is valid and if a message becomes expired after the timeout elapses, you
 will be notified.
 
@@ -127,10 +126,10 @@ will be notified.
 ```mermaid
 sequenceDiagram
 User->>+httpSMS API: Call /v1/messages/send API
-httpSMS API-->>+Push Queue: Schedule notification about new message
+httpSMS API-->>+Delivery Queue: Queue the message for the phone
 httpSMS API-->>-User: Respond with 202 (Accepted)
-Push Queue-->>+httpSMS API: [Async] Send notification request
-httpSMS API-->>-Android App: Send push notification about new message
+Delivery Queue-->>+httpSMS API: [Async] Mark the phone's queue as having work
+httpSMS API-->>-Android App: Hold the message (the phone long-polls)
 Android App-->>httpSMS API: [Async] Fetch message
 Android App-->>Android App: Send Message using Android SMS API
 Android App-->>httpSMS API: [Async] Send result of sending SMS
@@ -139,35 +138,12 @@ Android App-->>httpSMS API: [Async] Send Delivery Report
 
 ## Self Host Setup - Docker
 
-### 1. Setup Firebase
-
-- The httpSMS application uses [firebase cloud messaging](https://firebase.google.com/docs/cloud-messaging) for sending push notifications to your Android phone to trigger an SMS message to be sent out.
-  Visit the [firebase console](https://console.firebase.google.com/) and create a new project and follow the [steps here](https://firebase.google.com/docs/web/setup#register-app) to get your firebase web SDK config credentials.
-  For example, I created a firebase project called `httpsms-docker` and this is my web SDK configuration
-
-```js
-const firebaseConfig = {
-  apiKey: "AIzaSyAKqPvj51igvvNNcRtxxxxx",
-  authDomain: "httpsms-docker.firebaseapp.com",
-  projectId: "httpsms-docker",
-  storageBucket: "httpsms-docker.appspot.com",
-  messagingSenderId: "668063041624",
-  appId: "1:668063041624:web:29b9e3b702796xxxx",
-  measurementId: "G-18VRYL2xxxx",
-};
-```
-
-- Enable `Email/Password` sign-in in the [Firebase console](https://console.firebase.google.com/u/0/), open the **Authentication** section. On the Sign in method tab, enable the `Email/password` sign-in method and click `Save`.
-  - The firebase `email/password` sign-in method has [a bug](https://github.com/firebase/firebaseui-web/issues/1040) which prevents you from signing in. The work around right now is to [disable email enumeration protection](https://cloud.google.com/identity-platform/docs/admin/email-enumeration-protection#disable) on the firebase console.
-- Generate your firebase service account credentials by following the [steps here](https://firebase.google.com/docs/admin/setup#initialize_the_sdk_in_non-google_environments) and save the credentials in a file called `firebase-credentials.json` we will use this file to authenticate with the firebase admin SDK.
-- Generate your Android `google-services.json` file using [the instructions here](https://support.google.com/firebase/answer/7015592?hl=en#android&zippy=%2Cin-this-article) we will use it letter to configure the android app.
-
-### 2. Setup SMTP Email service
+### 1. Setup SMTP Email service
 
 The httpSMS application uses [SMTP](https://en.wikipedia.org/wiki/Simple_Mail_Transfer_Protocol) to send emails to users e.g. when your Android phone has been offline for a long period of time.
 You can use a service like [mailtrap](https://mailtrap.io/) to create an SMTP server for development purposes.
 
-### 3. Setup Cloudflare Turnstile
+### 2. Setup Cloudflare Turnstile
 
 The message search route (`/v1/messages/search`) is protected by a [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/get-started/) captcha to prevent abuse. You need to set up a Turnstile widget for the search messages feature to work.
 
@@ -175,7 +151,7 @@ The message search route (`/v1/messages/search`) is protected by a [Cloudflare T
 2. Add a new site and configure it for your self-hosted domain (e.g., `localhost` for local development).
 3. Note down the **Site Key** and **Secret Key** — you will need them for the frontend and backend environment variables respectively.
 
-### 4. Download the code
+### 3. Download the code
 
 Clone the httpSMS GitHub repository
 
@@ -183,7 +159,7 @@ Clone the httpSMS GitHub repository
 git clone https://github.com/NdoleStudio/httpsms.git
 ```
 
-### 5. Setup the environment variables
+### 4. Setup the environment variables
 
 - Copy the `.env.docker` file in the `web` directory into `.env`
 
@@ -191,18 +167,10 @@ git clone https://github.com/NdoleStudio/httpsms.git
 cp web/.env.docker web/.env
 ```
 
-- Update the environment variables in the `.env` file in the `web` directory with your firebase web SDK configuration in step 1 above
+- Update the environment variables in the `.env` file in the `web` directory (the SPA reads `API_BASE_URL` for the API endpoint)
 
 ```dotenv
-FIREBASE_API_KEY=
-FIREBASE_AUTH_DOMAIN=
-FIREBASE_PROJECT_ID=
-FIREBASE_STORAGE_BUCKET=
-FIREBASE_MESSAGING_SENDER_ID=
-FIREBASE_APP_ID=
-FIREBASE_MEASUREMENT_ID=
-
-# Cloudflare Turnstile site key from step 3
+# Cloudflare Turnstile site key from step 2
 CLOUDFLARE_TURNSTILE_SITE_KEY=
 ```
 
@@ -212,7 +180,7 @@ CLOUDFLARE_TURNSTILE_SITE_KEY=
 cp api/.env.docker api/.env
 ```
 
-- Update the environment variables in the `.env` file in the `api` directory with your firebase service account credentials, SMTP server details, and Cloudflare Turnstile secret key.
+- Update the environment variables in the `.env` file in the `api` directory with your SMTP server details and Cloudflare Turnstile secret key.
 
 ```dotenv
 # SMTP email server settings
@@ -221,19 +189,13 @@ SMTP_PASSWORD=
 SMTP_HOST=
 SMTP_PORT=
 
-# Firebase service account credentials
-FIREBASE_CREDENTIALS=
-
-# This is the `projectId` from your firebase web config
-GCP_PROJECT_ID=
-
-# Cloudflare Turnstile secret key from step 3
+# Cloudflare Turnstile secret key from step 2
 CLOUDFLARE_TURNSTILE_SECRET_KEY=
 ```
 
 - Don't bother about the `EVENTS_QUEUE_USER_API_KEY` and `EVENTS_QUEUE_USER_ID` settings. We will set that up later.
 
-### 6. Build and Run
+### 5. Build and Run
 
 - Build and run the API, the web UI, database and cache using the `docker-compose.yml` file. It takes a while for build and download all the docker images.
   When it's finished, you'll be able to access the web UI at http://localhost:3000 and the API at http://localhost:8000
@@ -242,7 +204,7 @@ CLOUDFLARE_TURNSTILE_SECRET_KEY=
 docker compose up --build
 ```
 
-### 7. Create the System User
+### 6. Create the System User
 
 - The application uses the concept of a system user to process events async. You should manually create this user in `users` table in your database. Make sure you use the same `id` and `api_key` as the `EVENTS_QUEUE_USER_ID`, and `EVENTS_QUEUE_USER_API_KEY` in your `.env` file.
 
@@ -253,9 +215,10 @@ docker compose up --build
 > [!IMPORTANT]
 > Restart your API docker container after modifying `EVENTS_QUEUE_USER_ID`, and `EVENTS_QUEUE_USER_API_KEY` in your `.env` file so that the httpSMS API can pick up the changes.
 
-### 8. Build the Android App.
+### 7. Build the Android App.
 
-- Before building the Android app in [Android Studio](https://developer.android.com/studio), you need to replace the `google-services.json` file in the `android/app` directory with the file which you got from step 1. You need to do this for the firebase FCM messages to work properly.
+- Open the `android` directory in [Android Studio](https://developer.android.com/studio) and build/run the app.
+- No Google Play Services, Firebase or `google-services.json` is involved: the app long-polls your API for outbound messages through a foreground service, so it works on GMS-less devices (e.g. mainland China).
 
 ## Integration Testing
 
@@ -267,8 +230,6 @@ The project includes end-to-end integration tests that validate the complete SMS
 
 ```bash
 cd tests
-bash generate-firebase-credentials.sh
-export FIREBASE_CREDENTIALS=$(jq -c . firebase-credentials.json)
 docker compose up -d --build --wait
 docker compose wait seed && sleep 2
 go test -v -timeout 120s ./...
