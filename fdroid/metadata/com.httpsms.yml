@@ -1,0 +1,16 @@
+# F-Droid listing for the self-hosted repo published by `./deploy.apk.sh --fdroid`.
+Categories:
+  - Phone & SMS
+License: AGPL-3.0-or-later
+WebSite: https://httpsms.bigt.ai
+SourceCode: https://github.com/j0904/httpsms
+IssueTracker: https://github.com/j0904/httpsms/issues
+Summary: Turn your phone into an SMS gateway with a simple HTTP API
+Description: |
+  httpSMS runs an SMS gateway on your Android phone: send and receive SMS
+  through a simple HTTP API, forward inbound messages with webhooks, and chat
+  end-to-end encrypted with the web UI.
+  .
+  Self-hosted build: this repository's api/web are the server, and the app needs
+  no Firebase or Google Play Services — it long-polls the API for outbound
+  messages.
