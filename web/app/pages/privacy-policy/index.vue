@@ -45,22 +45,6 @@ useHead({
         </p>
         <ul class="text-body-large pl-6 mb-6">
           <li>
-            <a
-              href="https://www.google.com/policies/privacy/"
-              target="_blank"
-              rel="noopener"
-              >Google Play Services</a
-            >
-          </li>
-          <li>
-            <a
-              href="https://firebase.google.com/policies/analytics"
-              target="_blank"
-              rel="noopener"
-              >Google Analytics for Firebase</a
-            >
-          </li>
-          <li>
             <a href="https://sentry.io/privacy/" target="_blank" rel="noopener"
               >Sentry</a
             >

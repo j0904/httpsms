@@ -51,8 +51,6 @@ End-to-end integration tests for the httpSMS API. These tests validate the compl
 
 - [Docker](https://docs.docker.com/get-docker/) with Docker Compose
 - [Go 1.22+](https://go.dev/dl/)
-- [jq](https://jqlang.github.io/jq/download/) (for Firebase credentials generation)
-- [OpenSSL](https://www.openssl.org/) (for RSA key generation)
 
 ## Running Locally
 
