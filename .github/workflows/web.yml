@@ -81,12 +81,3 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy web/.output/public --project-name=httpsms
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Firebase Deploy 🚀
-        uses: FirebaseExtended/action-hosting-deploy@500ac625ca2dd40cbd15f7659af953801858032a
-        with:
-          repoToken: "${{ secrets.GITHUB_TOKEN }}"
-          channelId: live
-          entryPoint: "./web"
-          firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_HTTPSMS_86C51 }}"
-          projectId: httpsms-86c51

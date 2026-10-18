@@ -103,15 +103,15 @@ The API uses a **DI container** (`pkg/di/container.go`) that lazily initializes 
 
 - **State management**: Single Vuex store (`store/index.ts`) — actions make API calls via Axios, mutations update state, getters expose computed values.
 - **Components**: Use `vue-property-decorator` class syntax with `@Component`, `@Prop`, `@Watch` decorators.
-- **API client**: Axios configured in `plugins/axios.ts` with Firebase bearer token auth and `x-api-key` header support.
+- **API client**: Axios configured in `plugins/axios.ts` with DID bearer token auth and `x-api-key` header support.
 - **API models**: TypeScript types in `models/` are auto-generated from the Swagger spec via `swagger-typescript-api`.
-- **Auth**: Firebase Authentication (Email/Password, Google, GitHub) with `auth` and `guest` middleware for route guards.
+- **Auth**: DID-based challenge-response (BigTangle PQKey / ML-DSA-87) with `auth` and `guest` middleware for route guards. No Firebase/Google dependency.
 - **Real-time**: Pusher.js for live message updates.
 
 ### Android — Task-Oriented, Event-Driven
 
 - **No MVVM/Clean Architecture** — uses a flat package structure with Activities, Services, BroadcastReceivers, and WorkManager tasks.
-- **FCM integration**: `MyFirebaseMessagingService` receives push notifications → schedules `SendSmsWorker` via WorkManager → fetches message from API → sends SMS.
+- **Message delivery**: no FCM/push — the app long-polls the API from a foreground service (`StickyNotificationService`) and runs `HeartbeatWorker`; outbound sends go through `SendSmsWorker` via WorkManager.
 - **Dual SIM support**: Independent settings per SIM via `Settings` singleton (SharedPreferences).
 - **HTTP client**: OkHttp with `x-api-key` authentication against the API.
 - **Encryption**: AES-256/CFB with SHA-256 key derivation (`Encrypter.kt`).

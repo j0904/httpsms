@@ -38,20 +38,13 @@ End-to-end integration tests for the httpSMS API. These tests validate the compl
 
 ### How It Works
 
-1. **Send SMS flow**: Test sends `POST /v1/messages/send` → API pushes FCM notification to emulator → Emulator calls `GET /v1/messages/outstanding` → Emulator fires `SENT` and `DELIVERED` events → Test polls `GET /v1/messages/{id}` until status is `delivered`
+1. **Send SMS flow**: Test sends `POST /v1/messages/send` → API queues the message for the phone → Emulator long-polls `GET /v1/messages/outstanding` → Emulator fires `SENT` and `DELIVERED` events → Test polls `GET /v1/messages/{id}` until status is `delivered`
 
 2. **Receive SMS flow**: Test sends `POST /v1/messages/receive` (as the phone) → API stores message → Test verifies via `GET /v1/messages/{id}`
 
-### FCM Redirect
-
-The API's Firebase SDK is configured (via `FCM_ENDPOINT` env var) to redirect all FCM HTTP requests to the emulator instead of Google's servers. The emulator serves:
-
-- `/token` — Fake OAuth2 token endpoint (Firebase SDK requests tokens before sending)
-- `/v1/projects/:project/messages:send` — Fake FCM push endpoint
-
 ## Test Coverage
 
-- [x] **Send SMS E2E** — Full send lifecycle: API → FCM push → emulator responds with SENT/DELIVERED events → message reaches `delivered` status
+- [x] **Send SMS E2E** — Full send lifecycle: API queues the message → emulator long-polls and responds with SENT/DELIVERED events → message reaches `delivered` status
 - [x] **Receive SMS E2E** — Phone submits received message to API → message is stored and retrievable via GET endpoint
 
 ## Prerequisites
@@ -63,24 +56,7 @@ The API's Firebase SDK is configured (via `FCM_ENDPOINT` env var) to redirect al
 
 ## Running Locally
 
-### 1. Generate Firebase Credentials
-
-The integration tests use a fake Firebase service account. Generate it with:
-
-```bash
-cd tests
-bash generate-firebase-credentials.sh
-```
-
-This creates `firebase-credentials.json` with a throwaway RSA key (the emulator doesn't validate tokens).
-
-### 2. Set Environment Variable
-
-```bash
-export FIREBASE_CREDENTIALS=$(jq -c . firebase-credentials.json)
-```
-
-### 3. Start the Stack
+### 1. Start the Stack
 
 ```bash
 docker compose up -d --build --wait
@@ -88,7 +64,7 @@ docker compose up -d --build --wait
 
 This starts CockroachDB, Redis, the API, and the emulator. The `--wait` flag blocks until all health checks pass.
 
-### 4. Wait for Seeding
+### 2. Wait for Seeding
 
 ```bash
 docker compose wait seed
@@ -97,13 +73,13 @@ sleep 2
 
 The seed container inserts test users, phones, and API keys into CockroachDB after the API has run its GORM migrations.
 
-### 5. Run Tests
+### 3. Run Tests
 
 ```bash
 go test -v -timeout 120s ./...
 ```
 
-### 6. Tear Down
+### 4. Tear Down
 
 ```bash
 docker compose down -v
@@ -115,8 +91,6 @@ The `-v` flag removes volumes (database data) for a clean slate next run.
 
 ```bash
 cd tests && \
-  bash generate-firebase-credentials.sh && \
-  export FIREBASE_CREDENTIALS=$(jq -c . firebase-credentials.json) && \
   docker compose up -d --build --wait && \
   docker compose wait seed && \
   sleep 2 && \
@@ -129,7 +103,7 @@ cd tests && \
 Integration tests run automatically via GitHub Actions (`.github/workflows/integration-test.yml`):
 
 - **Trigger**: Push to `main` or pull request targeting `main`
-- **Flow**: Generates credentials → Starts Docker stack → Seeds DB → Runs tests → Collects logs on failure → Tears down
+- **Flow**: Starts Docker stack → Seeds DB → Runs tests → Collects logs on failure → Tears down
 - **Gate**: Deployment should only proceed if integration tests pass
 
 ## Test Data
@@ -152,7 +126,6 @@ tests/
 ├── docker-compose.yml       # Full stack orchestration
 ├── seed.sql                 # Database seed data
 ├── .env.test                # API environment variables
-├── generate-firebase-credentials.sh  # Generates fake Firebase credentials
 ├── go.mod                   # Test runner Go module
 ├── go.sum
 ├── helpers_test.go          # Test utilities (HTTP client, polling)
@@ -180,7 +153,6 @@ docker compose logs api
 
 Common issues:
 
-- `FIREBASE_CREDENTIALS` env var not set or malformed
 - CockroachDB not ready (increase `start_period` in healthcheck)
 
 ### Tests timeout waiting for `delivered` status
@@ -191,12 +163,7 @@ Check the emulator logs:
 docker compose logs emulator
 ```
 
-The emulator should show:
-
-1. `[FCM]` — Receiving the push notification
-2. `[EVENTS]` — Fetching outstanding messages and firing events
-
-If no `[FCM]` entries appear, the API isn't reaching the emulator (check `FCM_ENDPOINT` in `.env.test`).
+The emulator should show `[EVENTS]` entries while it long-polls `GET /v1/messages/outstanding`. If none appear, the emulator isn't reaching the API (check the API URL in `.env.test`).
 
 ### Seed container fails
 

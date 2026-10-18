@@ -92,8 +92,6 @@ services:
         condition: service_healthy
     env_file:
       - .env.test
-    environment:
-      FIREBASE_CREDENTIALS: "${FIREBASE_CREDENTIALS}"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 5s

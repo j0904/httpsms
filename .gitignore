@@ -8,7 +8,6 @@ android/app/debug/
 android/app/release/
 /out/
 
-tests/firebase-credentials.json
 tests/emulator/emulator.exe
 tests/e2e/node_modules/
 tests/e2e/test-results/
